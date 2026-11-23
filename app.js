@@ -1,4 +1,4 @@
-import {analyse, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
+import {analyse, grade, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
 
 const KEY = 'biathlon-eps-classes-v1';
@@ -57,6 +57,12 @@ function classPicker() {
   </div></section>`;
 }
 
+function scalePicker(value) {
+  return `<label>Barème de vitesse<select name="runningScale"><option value="">Choisir</option>
+    ${labelOption('girls', 'Filles', value === 'girls')}${labelOption('boys', 'Garçons', value === 'boys')}
+    </select></label>`;
+}
+
 function classes() {
   const group = currentClass();
   const edited = group?.students.find(item => item.id === editingId);
@@ -69,6 +75,7 @@ function classes() {
     <label>Nom<input name="last" required maxlength="100" value="${e(edited?.last)}"></label>
     <label>Prénom<input name="first" required maxlength="100" value="${e(edited?.first)}"></label>
     <label>Référence sur 200 m<input name="reference" inputmode="decimal" value="${inputTime(edited?.reference)}" placeholder="Ex. 42,5"></label>
+    ${scalePicker(edited?.runningScale)}
     </div><div class="actions"><button class="primary">${edited ? 'Enregistrer la modification' : 'Ajouter l’élève'}</button>
     ${edited ? '<button type="button" data-action="cancel">Annuler</button>' : ''}</div></form></section>
     <section class="panel"><h2>Importer depuis Excel</h2><p class="muted">Première feuille du fichier .xlsx. Colonnes Nom, Prénom et, si disponible, Référence 200 m.</p>
@@ -111,7 +118,42 @@ function entry(student) {
       ${targetPicker(index, draft ? draft['hits' + index] : shot?.hits)}
       <label>Tirs réalisés<input name="attempts${index}" required inputmode="numeric" pattern="[0-9]+" value="${e(draft ? draft['attempts' + index] : shot?.attempts)}" placeholder="Ex. 8"></label></section>`;
   }).join('')}</div>
-  <button class="primary">Enregistrer et voir le bilan</button></form></section>`;
+  <div class="actions">
+    <button class="primary" type="submit">Enregistrer</button>
+    <button type="button" data-go="report" ${result ? '' : 'disabled'}>Voir le bilan</button>
+  </div></form></section>`;
+}
+
+const pointFormat = new Intl.NumberFormat('fr-FR', {maximumFractionDigits: 2});
+const points = (value, max) => value === null ? '—' : `${pointFormat.format(value)} / ${max}`;
+
+function gradePanel(student, metrics) {
+  const mark = grade(student, metrics);
+  const items = [
+    ['Vitesse hors tir', mark.speed, 3],
+    ['Objectif individuel', mark.objective, 7],
+    ['Réussite au tir', mark.accuracy, 4],
+    ['Temps de tir', mark.shootingTime, 2],
+    ['Sous-total épreuve', mark.subtotal, 16],
+    ['Note finale', mark.total, 20]
+  ];
+  return `<section class="panel"><h2>Évaluation sur 20</h2>
+    <div class="stats">${items.map(([label, value, max]) =>
+      `<div class="card"><small>${label}</small><strong>${points(value, max)}</strong></div>`).join('')}</div>
+    ${mark.delay === null ? '<p>Renseigne la référence sur 200 m dans <strong>Classes</strong>.</p>' :
+      `<p>Écart à l’objectif individuel · ${pointFormat.format(mark.delay * 100)} %</p>`}
+    ${mark.accuracy === null ? '<p>Renseigne les quatre nombres de tirs dans <strong>Épreuve</strong>.</p>' : ''}
+    <form id="grade-form"><div class="grid">
+      ${scalePicker(student.runningScale)}
+      <label>Investissement sur le cycle / 4<input name="investment" inputmode="decimal" value="${e(student.investment?.toString().replace('.', ','))}" placeholder="Ex. 3,5"></label>
+    </div><button class="primary">Enregistrer le barème et l’investissement</button></form>
+    <details><summary>Voir les seuils du barème</summary>
+      <p>Vitesse hors tir · 0,6 point par seuil atteint. Garçons · 9, 10,5, 12, 13,5 et 15 km/h. Filles · 8, 9,5, 11, 12,5 et 14 km/h.</p>
+      <p>Objectif individuel · 7 points si le temps cible est atteint ou battu. En cas de retard, 5,6 points jusqu’à 5 %, 4,2 jusqu’à 10 %, 2,8 jusqu’à 15 %, 1,4 jusqu’à 20 %, puis 0.</p>
+      <p>Réussite · 4 × cibles touchées ÷ tirs réalisés. Si aucun tir n’a été réalisé, 0 point.</p>
+      <p>Temps de tir · à partir de 12 cibles touchées, 2 points jusqu’à 2.00, 1,5 jusqu’à 2.15, 1 jusqu’à 2.30, 0,5 jusqu’à 2.45, puis 0.</p>
+    </details>
+  </section>`;
 }
 
 function report(student) {
@@ -128,6 +170,7 @@ function report(student) {
   ${metric('Écart à la cible', m.target ? signedTime(m.timeGap) : '—', m.target ? signedSpeed(m.eventSpeed - m.targetSpeed) + ' par rapport à la cible' : 'Calculé avec la référence 200 m')}
   ${metric('Réussite au tir', totalShotAccuracy(result.shots), 'Cibles touchées ÷ total des tirs réalisés')}
   </div><details><summary>Détail des calculs</summary><p>Vitesse de course = 800 m ÷ (temps total − temps passé au tir). Vitesse globale = 800 m ÷ temps total. Temps cible = 4 × référence sur 200 m + 4 × 30 s. Vitesse cible = 800 m ÷ temps cible. Les vitesses sont converties en km/h.</p></details></section>
+  ${gradePanel(student, m)}
   <section class="panel"><h2>Passages au tir</h2><p class="muted">Temps total au tir <strong>${formatTime(m.shooting)}</strong> · Cibles touchées <strong>${m.hits} / 20</strong></p>
   <div class="bars">${result.shots.map((shot, index) => `<div class="bar-row"><span>Tir ${index + 1}</span><div class="bar" aria-hidden="true"><i style="width:${100 * shot.time / maxShot}%"></i></div><strong>${formatTime(shot.time)}</strong></div>`).join('')}</div>
   <p>Évolution du premier au dernier passage <strong>${signedTime(m.shotGap)}</strong></p>
@@ -260,7 +303,7 @@ screen.addEventListener('submit', async event => {
       const first = form.get('first').trim();
       if (!last || !first) throw new Error('Saisis le nom et le prénom.');
       const reference = getTime(form, 'reference', 'Référence 200 m', true);
-      const fields = {last, first, reference};
+      const fields = {last, first, reference, runningScale: form.get('runningScale') || null};
       if (!mutateClass(groupId, group => {
         if (editingId) Object.assign(group.students.find(item => item.id === editingId), fields);
         else group.students.push({id:newId(), ...fields});
@@ -277,6 +320,16 @@ screen.addEventListener('submit', async event => {
       } finally {
         button.disabled = false;
       }
+    } else if (target.id === 'grade-form') {
+      const raw = String(form.get('investment') ?? '').trim();
+      const investment = raw ? Number(raw.replace(',', '.')) : null;
+      if (raw && (!/^\d+(?:[,.]\d+)?$/.test(raw) || !Number.isFinite(investment) || investment > 4)) {
+        throw new Error('Saisis une note d’investissement entre 0 et 4.');
+      }
+      const runningScale = form.get('runningScale') || null;
+      if (!mutateClass(groupId, group => {
+        Object.assign(group.students.find(item => item.id === studentId), {runningScale, investment});
+      }, 'Barème et investissement enregistrés.')) return;
     } else if (target.id === 'result-form') {
       const total = getTime(form, 'total', 'Temps total');
       const shots = Array.from({length:4}, (_, i) => ({
@@ -303,7 +356,6 @@ screen.addEventListener('submit', async event => {
         group.students.find(item => item.id === studentId).result = {total, shots};
       }, 'Résultat enregistré.')) return;
       resultDrafts.delete(studentId);
-      view = 'report';
     }
     render();
   } catch (error) {
