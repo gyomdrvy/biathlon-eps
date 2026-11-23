@@ -13,8 +13,8 @@ L’application fonctionne hors ligne lorsque la mise en cache initiale a abouti
 
 ## Utilisation
 
-- **Classes**. Crée une classe et ajoute des élèves à la main ou importe un classeur `.xlsx`. Utilise la première feuille et les colonnes `Nom`, `Prénom` et, facultativement, `Référence 200 m`. Le modèle Excel est disponible dans l’application. Les imports ajoutent des élèves à la classe sélectionnée.
-- **Épreuve**. Renseigne le temps total de l’épreuve, tir compris, puis la durée et les touches de chaque passage. Tu peux saisir des secondes (42,5) ou des minutes et secondes (4:48). L’application conserve un résultat modifiable par élève.
+- **Classes**. Crée une classe et ajoute des élèves à la main ou importe un classeur `.xlsx`. Utilise la première feuille et les colonnes `Nom`, `Prénom` et, facultativement, `Référence 200 m`. Le modèle Excel est disponible dans l’application. Les imports ajoutent des élèves à la classe sélectionnée. Saisis ou corrige la référence directement dans la liste. Elle est enregistrée en quittant le champ. Le bouton **Supprimer** retire l’élève et son résultat après confirmation.
+- **Épreuve**. Renseigne le temps total de l’épreuve, tir compris, puis la durée et les touches de chaque passage. Tu peux saisir des secondes (42,5) ou des minutes et secondes (4:48). Les boutons **Précédent** et **Suivant** suivent l’ordre de la liste de classe. Les saisies en cours restent disponibles pendant la navigation. Utilise **Enregistrer et voir le bilan** pour conserver le résultat après fermeture de l’application.
 - **Bilan**. Consulte la vitesse de course hors tir, la vitesse globale de l’épreuve, l’écart à l’objectif et l’évolution des quatre passages de tir. La comparaison avec l’objectif apparaît dès que la référence de l’élève est renseignée.
 
 Le temps cible correspond à quatre fois la référence individuelle sur 200 m, plus 120 secondes de tir. Les vitesses sont calculées sur 800 m. L’écart de temps correspond au temps total réel moins le temps cible.

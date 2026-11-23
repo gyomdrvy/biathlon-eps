@@ -9,6 +9,7 @@ let view = 'classes';
 let classId = data[0]?.id;
 let studentId;
 let editingId;
+const resultDrafts = new Map();
 
 function load() {
   try {
@@ -74,19 +75,29 @@ function classes() {
     <section class="panel"><h2>Importer depuis Excel</h2><p class="muted">Première feuille du fichier .xlsx. Colonnes Nom, Prénom et, si disponible, Référence 200 m.</p>
     <form id="import-form"><div class="grid"><label>Classeur Excel<input type="file" name="file" accept=".xlsx" required></label></div><div class="actions"><button class="primary">Importer dans ${e(group.name)}</button><a href="./modele-classe.xlsx" download>Modèle Excel</a></div></form></section>
     <section class="panel"><h2>Élèves · ${group.students.length}</h2>
-    ${group.students.length ? group.students.map(item => `<div class="row"><div><strong>${e(fullName(item))}</strong><small>200 m · ${item.reference ? formatTime(item.reference) : 'à renseigner'}</small></div>
-    <div class="actions"><button data-edit="${item.id}">Modifier</button><button data-open="${item.id}">Épreuve</button></div></div>`).join('') : '<p class="muted">Ajoute un élève ou importe une liste.</p>'}</section>` : ''}`;
+    ${group.students.length ? '<p class="muted">Référence sur 200 m en secondes (42,5) ou en minutes:secondes (0:42). La saisie s’enregistre quand tu quittes le champ.</p>' : ''}
+    ${group.students.length ? group.students.map(item => `<div class="row student-row"><strong>${e(fullName(item))}</strong>
+    <label>Référence 200 m<input data-reference="${item.id}" aria-label="Référence 200 m · ${e(fullName(item))}" inputmode="decimal" value="${inputTime(item.reference)}" placeholder="Ex. 42,5"></label>
+    <div class="actions"><button data-edit="${item.id}">Modifier</button><button data-open="${item.id}">Épreuve</button><button class="danger" data-delete="${item.id}" aria-label="Supprimer ${e(fullName(item))}">Supprimer</button></div></div>`).join('') : '<p class="muted">Ajoute un élève ou importe une liste.</p>'}</section>` : ''}`;
 }
 
 function entry(student) {
   const result = student.result;
-  return `<section class="panel"><h2>Saisir l’épreuve</h2><p class="muted">En secondes (ex. 32,5) ou en minutes:secondes (ex. 4:48).</p>
-  <form id="result-form"><div class="grid"><label>Temps total, tir compris<input name="total" required value="${inputTime(result?.total)}" placeholder="Ex. 4:48"></label></div>
+  const draft = resultDrafts.get(student.id);
+  const fieldTime = (name, value) => e(draft ? draft[name] : inputTime(value));
+  const students = currentClass().students;
+  const index = students.findIndex(item => item.id === student.id);
+  return `<section class="panel"><div class="student-nav" aria-label="Navigation entre les élèves">
+  <button data-open="${students[index - 1]?.id ?? ''}" ${index === 0 ? 'disabled' : ''}>Précédent</button>
+  <div class="student-position"><strong>${e(fullName(student))}</strong><small>${index + 1} / ${students.length}</small></div>
+  <button data-open="${students[index + 1]?.id ?? ''}" ${index === students.length - 1 ? 'disabled' : ''}>Suivant</button></div>
+  <h2>Saisir l’épreuve</h2><p class="muted">En secondes (ex. 32,5) ou en minutes:secondes (ex. 4:48).</p>
+  <form id="result-form"><div class="grid"><label>Temps total, tir compris<input name="total" required value="${fieldTime('total', result?.total)}" placeholder="Ex. 4:48"></label></div>
   <div class="shots">${Array.from({length:4}, (_, index) => {
     const shot = result?.shots[index];
     return `<section class="card"><h3>Passage ${index + 1}</h3>
-      <label>Temps au tir<input name="time${index}" required inputmode="decimal" value="${inputTime(shot?.time)}" placeholder="Ex. 30"></label>
-      <label>Cibles touchées<select name="hits${index}" required><option value="">Choisir</option>${Array.from({length:6}, (_, hits) => labelOption(hits, `${hits} / 5`, hits === shot?.hits)).join('')}</select></label></section>`;
+      <label>Temps au tir<input name="time${index}" required inputmode="decimal" value="${fieldTime('time' + index, shot?.time)}" placeholder="Ex. 30"></label>
+      <label>Cibles touchées<select name="hits${index}" required><option value="">Choisir</option>${Array.from({length:6}, (_, hits) => labelOption(hits, `${hits} / 5`, draft ? String(hits) === draft['hits' + index] : hits === shot?.hits)).join('')}</select></label></section>`;
   }).join('')}</div>
   <button class="primary">Enregistrer et voir le bilan</button></form></section>`;
 }
@@ -134,7 +145,7 @@ function go(target) {
 document.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button) return;
-  const {view: destination, go: jump, edit, open, action} = button.dataset;
+  const {view: destination, go: jump, edit, open, delete: deleteId, action} = button.dataset;
   if (destination || jump) go(destination || jump);
   if (edit || action === 'cancel') {
     editingId = edit || undefined;
@@ -145,9 +156,46 @@ document.addEventListener('click', event => {
     studentId = open;
     go('entry');
   }
+  if (deleteId) {
+    const student = currentClass()?.students.find(item => item.id === deleteId);
+    if (!student || !window.confirm(`Supprimer ${fullName(student)} de la classe ? Son résultat sera aussi supprimé.`)) return;
+    if (!mutateClass(classId, group => {
+      group.students = group.students.filter(item => item.id !== deleteId);
+    }, 'Élève supprimé.')) return;
+    resultDrafts.delete(deleteId);
+    if (editingId === deleteId) editingId = undefined;
+    render();
+  }
+});
+
+screen.addEventListener('input', event => {
+  const form = event.target.form;
+  if (form?.id === 'result-form') {
+    resultDrafts.set(studentId, Object.fromEntries(new FormData(form)));
+  }
+  if (event.target.dataset.reference) event.target.removeAttribute('aria-invalid');
 });
 
 screen.addEventListener('change', event => {
+  const input = event.target;
+  const referenceId = input.dataset.reference;
+  if (referenceId) {
+    const raw = input.value.trim();
+    const reference = raw ? parseTime(raw) : null;
+    if (raw && (!Number.isFinite(reference) || reference <= 0)) {
+      input.setAttribute('aria-invalid', 'true');
+      status.textContent = 'Référence 200 m invalide. Saisis une durée positive, par exemple 42,5 ou 0:42.';
+      return;
+    }
+    const student = currentClass().students.find(item => item.id === referenceId);
+    if (student.reference === reference) return;
+    if (mutateClass(classId, group => {
+      group.students.find(item => item.id === referenceId).reference = reference;
+    }, 'Référence enregistrée.') && editingId === referenceId) {
+      document.querySelector('#student-form [name="reference"]').value = inputTime(reference);
+    }
+    return;
+  }
   if (event.target.id === 'class-select') {
     classId = event.target.value;
     editingId = undefined;
@@ -219,6 +267,7 @@ screen.addEventListener('submit', async event => {
       if (!mutateClass(groupId, group => {
         group.students.find(item => item.id === studentId).result = {total, shots};
       }, 'Résultat enregistré.')) return;
+      resultDrafts.delete(studentId);
       view = 'report';
     }
     render();
