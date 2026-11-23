@@ -81,3 +81,13 @@ button.danger{color:#a22517}
 .target-controls{display:flex;align-items:center;gap:8px;margin-top:4px}
 .target-count{font-size:.92rem;font-weight:700}
 @media(max-width:420px){#result-form .shots{grid-template-columns:1fr}}
+nav{grid-template-columns:repeat(4,minmax(0,1fr))}
+.student-row{grid-template-columns:minmax(0,1fr) minmax(105px,125px) minmax(110px,150px) auto}
+@media(max-width:750px){.student-row{grid-template-columns:minmax(0,1fr) minmax(100px,140px) minmax(105px,145px)}.student-row .actions{grid-column:1/-1}}
+@media(max-width:490px){nav{grid-template-columns:repeat(2,minmax(0,1fr))}.student-row{grid-template-columns:1fr 1fr}.student-row strong{grid-column:1/-1}}
+.class-report-scroll{margin:12px 0;overflow:auto}
+.class-report-table{border-collapse:collapse;width:100%;min-width:640px}
+.class-report-table th,.class-report-table td{border-bottom:1px solid var(--line);padding:10px;text-align:center}
+.class-report-table thead{background:#f8f2ef}
+.class-report-table th:first-child{text-align:left}
+.class-report-table td{white-space:nowrap;font-variant-numeric:tabular-nums}

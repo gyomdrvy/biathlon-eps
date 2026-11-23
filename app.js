@@ -50,17 +50,11 @@ function classPicker() {
   if (!data.length) return '';
   const group = currentClass();
   const students = group.students;
-  const selectStudent = view !== 'classes' && students.length;
+  const selectStudent = ['entry', 'report'].includes(view) && students.length;
   return `<section class="panel"><div class="grid">
     <label>Classe<select id="class-select">${data.map(item => labelOption(item.id, item.name, item.id === classId)).join('')}</select></label>
     ${selectStudent ? `<label>Élève<select id="student-select">${students.map(item => labelOption(item.id, fullName(item), item.id === studentId)).join('')}</select></label>` : ''}
   </div></section>`;
-}
-
-function scalePicker(value) {
-  return `<label>Barème de vitesse<select name="runningScale"><option value="">Choisir</option>
-    ${labelOption('girls', 'Filles', value === 'girls')}${labelOption('boys', 'Garçons', value === 'boys')}
-    </select></label>`;
 }
 
 function classes() {
@@ -75,7 +69,6 @@ function classes() {
     <label>Nom<input name="last" required maxlength="100" value="${e(edited?.last)}"></label>
     <label>Prénom<input name="first" required maxlength="100" value="${e(edited?.first)}"></label>
     <label>Référence sur 200 m<input name="reference" inputmode="decimal" value="${inputTime(edited?.reference)}" placeholder="Ex. 42,5"></label>
-    ${scalePicker(edited?.runningScale)}
     </div><div class="actions"><button class="primary">${edited ? 'Enregistrer la modification' : 'Ajouter l’élève'}</button>
     ${edited ? '<button type="button" data-action="cancel">Annuler</button>' : ''}</div></form></section>
     <section class="panel"><h2>Importer depuis Excel</h2><p class="muted">Première feuille du fichier .xlsx. Colonnes Nom, Prénom et, si disponible, Référence 200 m.</p>
@@ -83,6 +76,9 @@ function classes() {
     <section class="panel"><h2>Élèves · ${group.students.length}</h2>
     ${group.students.length ? '<p class="muted">Référence sur 200 m en secondes (42,5) ou en minutes.secondes (0.42). La saisie s’enregistre quand tu quittes le champ.</p>' : ''}
     ${group.students.length ? group.students.map(item => `<div class="row student-row"><strong>${e(fullName(item))}</strong>
+    <label>Fille/Garçon<select data-running-scale="${item.id}" aria-label="Fille ou garçon · ${e(fullName(item))}">
+      <option value="">Choisir</option>${labelOption('girls', 'Fille', item.runningScale === 'girls')}${labelOption('boys', 'Garçon', item.runningScale === 'boys')}
+    </select></label>
     <label>Référence 200 m<input data-reference="${item.id}" aria-label="Référence 200 m · ${e(fullName(item))}" inputmode="decimal" value="${inputTime(item.reference)}" placeholder="Ex. 42,5"></label>
     <div class="actions"><button data-edit="${item.id}">Modifier</button><button data-open="${item.id}">Épreuve</button><button class="danger" data-delete="${item.id}" aria-label="Supprimer ${e(fullName(item))}">Supprimer</button></div></div>`).join('') : '<p class="muted">Ajoute un élève ou importe une liste.</p>'}</section>` : ''}`;
 }
@@ -143,10 +139,10 @@ function gradePanel(student, metrics) {
     ${mark.delay === null ? '<p>Renseigne la référence sur 200 m dans <strong>Classes</strong>.</p>' :
       `<p>Écart à l’objectif individuel · ${pointFormat.format(mark.delay * 100)} %</p>`}
     ${mark.accuracy === null ? '<p>Renseigne les quatre nombres de tirs dans <strong>Épreuve</strong>.</p>' : ''}
+    ${mark.speed === null ? '<p>Choisis Fille ou Garçon dans la liste des élèves, dans <strong>Classes</strong>.</p>' : ''}
     <form id="grade-form"><div class="grid">
-      ${scalePicker(student.runningScale)}
       <label>Investissement sur le cycle / 4<input name="investment" inputmode="decimal" value="${e(student.investment?.toString().replace('.', ','))}" placeholder="Ex. 3,5"></label>
-    </div><button class="primary">Enregistrer le barème et l’investissement</button></form>
+    </div><button class="primary">Enregistrer l’investissement</button></form>
     <details><summary>Voir les seuils du barème</summary>
       <p>Vitesse hors tir · 0,6 point par seuil atteint. Garçons · 9, 10,5, 12, 13,5 et 15 km/h. Filles · 8, 9,5, 11, 12,5 et 14 km/h.</p>
       <p>Objectif individuel · 7 points si le temps cible est atteint ou battu. En cas de retard, 5,6 points jusqu’à 5 %, 4,2 jusqu’à 10 %, 2,8 jusqu’à 15 %, 1,4 jusqu’à 20 %, puis 0.</p>
@@ -179,6 +175,31 @@ function report(student) {
   <button data-go="entry">Modifier la saisie</button></section>`;
 }
 
+function classReport() {
+  const group = currentClass();
+  if (!group?.students.length) {
+    return classPicker() + '<section class="panel"><h2>Bilan de classe</h2><p>Aucun élève à afficher.</p></section>';
+  }
+  const rows = group.students.map(student => {
+    const mark = student.result ? grade(student, analyse(student.reference, student.result)) : null;
+    return `<tr><th scope="row">${e(fullName(student))}</th>
+      <td>${points(mark?.speed ?? null, 3)}</td>
+      <td>${points(mark?.objective ?? null, 7)}</td>
+      <td>${points(mark?.accuracy ?? null, 4)}</td>
+      <td>${points(mark?.shootingTime ?? null, 2)}</td>
+      <td>${points(student.investment ?? null, 4)}</td></tr>`;
+  }).join('');
+  return classPicker() + `<section class="panel"><h2 id="class-report-title">Bilan de classe · ${e(group.name)}</h2>
+    <div class="class-report-scroll" role="region" aria-labelledby="class-report-title" tabindex="0">
+      <table class="class-report-table" aria-labelledby="class-report-title">
+        <thead><tr><th scope="col">Élève</th><th scope="col">Vitesse / 3</th><th scope="col">Objectif individuel / 7</th>
+          <th scope="col">Réussite au tir / 4</th><th scope="col">Temps au tir / 2</th><th scope="col">Investissement sur le cycle / 4</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div><small>Un tiret indique une donnée à renseigner.</small>
+  </section>`;
+}
+
 function render() {
   if (!currentClass()) classId = data[0]?.id;
   if (!currentStudent()) studentId = currentClass()?.students[0]?.id;
@@ -188,6 +209,7 @@ function render() {
   }
   const student = currentStudent();
   if (view === 'classes') screen.innerHTML = classes();
+  else if (view === 'class-report') screen.innerHTML = classReport();
   else if (!student) screen.innerHTML = classPicker() + '<section class="panel"><h2>Aucun élève dans cette classe</h2><button data-go="classes">Gérer les classes</button></section>';
   else screen.innerHTML = classPicker() + (view === 'entry' ? entry(student) : report(student));
 }
@@ -246,6 +268,16 @@ screen.addEventListener('input', event => {
 
 screen.addEventListener('change', event => {
   const input = event.target;
+  const scaleId = input.dataset.runningScale;
+  if (scaleId) {
+    const student = currentClass().students.find(item => item.id === scaleId);
+    const previous = student.runningScale ?? '';
+    const runningScale = input.value || null;
+    if (!mutateClass(classId, group => {
+      group.students.find(item => item.id === scaleId).runningScale = runningScale;
+    }, 'Barème de vitesse enregistré.')) input.value = previous;
+    return;
+  }
   const referenceId = input.dataset.reference;
   if (referenceId) {
     const raw = input.value.trim();
@@ -303,7 +335,7 @@ screen.addEventListener('submit', async event => {
       const first = form.get('first').trim();
       if (!last || !first) throw new Error('Saisis le nom et le prénom.');
       const reference = getTime(form, 'reference', 'Référence 200 m', true);
-      const fields = {last, first, reference, runningScale: form.get('runningScale') || null};
+      const fields = {last, first, reference};
       if (!mutateClass(groupId, group => {
         if (editingId) Object.assign(group.students.find(item => item.id === editingId), fields);
         else group.students.push({id:newId(), ...fields});
@@ -326,10 +358,9 @@ screen.addEventListener('submit', async event => {
       if (raw && (!/^\d+(?:[,.]\d+)?$/.test(raw) || !Number.isFinite(investment) || investment > 4)) {
         throw new Error('Saisis une note d’investissement entre 0 et 4.');
       }
-      const runningScale = form.get('runningScale') || null;
       if (!mutateClass(groupId, group => {
-        Object.assign(group.students.find(item => item.id === studentId), {runningScale, investment});
-      }, 'Barème et investissement enregistrés.')) return;
+        group.students.find(item => item.id === studentId).investment = investment;
+      }, 'Investissement enregistré.')) return;
     } else if (target.id === 'result-form') {
       const total = getTime(form, 'total', 'Temps total');
       const shots = Array.from({length:4}, (_, i) => ({
