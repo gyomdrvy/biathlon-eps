@@ -28,3 +28,7 @@ Dans le bilan de l’épreuve, la réussite globale correspond au total des cibl
 Dans la liste des élèves, choisis Fille ou Garçon avant la référence 200 m. Le choix du barème de vitesse s’enregistre automatiquement. Dans le bilan individuel, saisis la note manuelle d’investissement sur 4. Le détail affiche les seuils de vitesse sur 3, l’objectif individuel sur 7, la réussite au tir sur 4 et le temps de tir sur 2. La note finale apparaît quand les données des quatre critères et l’investissement sont renseignés.
 
 L’onglet **Bilan de classe** récapitule les cinq critères pour chaque élève de la classe sélectionnée.
+
+Le **Bilan individuel** propose les boutons **Précédent** et **Suivant**. Le **Bilan de classe** permet de saisir l’investissement directement dans le tableau et affiche la note finale sur 20 dès que les cinq critères sont renseignés. L’investissement s’enregistre en quittant la case ou en appuyant sur Entrée.
+
+Objectif individuel sur 7 · 7 points si l’objectif est atteint ou battu, puis 6, 5, 4, 3, 2 et 1 point jusqu’à 8 %, 16 %, 24 %, 32 %, 40 % et 48 % de retard inclus, puis 0.

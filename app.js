@@ -95,16 +95,20 @@ function targetPicker(index, hits) {
   </fieldset>`;
 }
 
+function studentNavigation(student) {
+  const students = currentClass().students;
+  const index = students.findIndex(item => item.id === student.id);
+  return `<div class="student-nav" aria-label="Navigation entre les élèves">
+  <button data-neighbor="${students[index - 1]?.id ?? ''}" ${index === 0 ? 'disabled' : ''}>Précédent</button>
+  <div class="student-position"><strong>${e(fullName(student))}</strong><small>${index + 1} / ${students.length}</small></div>
+  <button data-neighbor="${students[index + 1]?.id ?? ''}" ${index === students.length - 1 ? 'disabled' : ''}>Suivant</button></div>`;
+}
+
 function entry(student) {
   const result = student.result;
   const draft = resultDrafts.get(student.id);
   const fieldTime = (name, value) => e(draft ? draft[name] : inputTime(value));
-  const students = currentClass().students;
-  const index = students.findIndex(item => item.id === student.id);
-  return `<section class="panel"><div class="student-nav" aria-label="Navigation entre les élèves">
-  <button data-open="${students[index - 1]?.id ?? ''}" ${index === 0 ? 'disabled' : ''}>Précédent</button>
-  <div class="student-position"><strong>${e(fullName(student))}</strong><small>${index + 1} / ${students.length}</small></div>
-  <button data-open="${students[index + 1]?.id ?? ''}" ${index === students.length - 1 ? 'disabled' : ''}>Suivant</button></div>
+  return `<section class="panel">${studentNavigation(student)}
   <h2>Saisir l’épreuve</h2><p class="muted">En secondes (ex. 32,5) ou en minutes.secondes (ex. 4.48).</p>
   <form id="result-form"><div class="grid"><label>Temps total, tir compris<input name="total" inputmode="decimal" required value="${fieldTime('total', result?.total)}" placeholder="Ex. 4.48"></label></div>
   <div class="shots">${Array.from({length:4}, (_, index) => {
@@ -145,7 +149,7 @@ function gradePanel(student, metrics) {
     </div><button class="primary">Enregistrer l’investissement</button></form>
     <details><summary>Voir les seuils du barème</summary>
       <p>Vitesse hors tir · 0,6 point par seuil atteint. Garçons · 9, 10,5, 12, 13,5 et 15 km/h. Filles · 8, 9,5, 11, 12,5 et 14 km/h.</p>
-      <p>Objectif individuel · 7 points si le temps cible est atteint ou battu. En cas de retard, 5,6 points jusqu’à 5 %, 4,2 jusqu’à 10 %, 2,8 jusqu’à 15 %, 1,4 jusqu’à 20 %, puis 0.</p>
+      <p>Objectif individuel · 7 points si le temps cible est atteint ou battu. En cas de retard, 6 points jusqu’à 8 %, 5 jusqu’à 16 %, 4 jusqu’à 24 %, 3 jusqu’à 32 %, 2 jusqu’à 40 %, 1 jusqu’à 48 %, puis 0.</p>
       <p>Réussite · 4 × cibles touchées ÷ tirs réalisés. Si aucun tir n’a été réalisé, 0 point.</p>
       <p>Temps de tir · à partir de 12 cibles touchées, 2 points jusqu’à 2.00, 1,5 jusqu’à 2.15, 1 jusqu’à 2.30, 0,5 jusqu’à 2.45, puis 0.</p>
     </details>
@@ -154,11 +158,11 @@ function gradePanel(student, metrics) {
 
 function report(student) {
   const result = student.result;
-  if (!result) return '<section class="panel"><h2>Bilan individuel</h2><p class="muted">Saisis les résultats de l’épreuve pour afficher le bilan.</p><button data-go="entry">Saisir l’épreuve</button></section>';
+  if (!result) return `<section class="panel">${studentNavigation(student)}<h2>Bilan individuel</h2><p class="muted">Saisis les résultats de l’épreuve pour afficher le bilan.</p><button data-go="entry">Saisir l’épreuve</button></section>`;
   const m = analyse(student.reference, result);
   const metric = (label, value, detail) => `<div class="card"><small>${label}</small><strong>${value}</strong><small>${detail}</small></div>`;
   const maxShot = Math.max(SHOOT_TARGET, ...result.shots.map(shot => shot.time));
-  return `<section class="panel"><h2>${e(fullName(student))}</h2><p class="muted">Bilan de l’épreuve sur 800 m</p>
+  return `<section class="panel">${studentNavigation(student)}<h2>Bilan de l’épreuve sur 800 m</h2>
   <div class="stats">
   ${metric('Vitesse de course', decimal(m.runningSpeed) + ' km/h', formatTime(m.running) + ' de course hors tir')}
   ${metric('Vitesse globale', decimal(m.eventSpeed) + ' km/h', 'Temps total · ' + formatTime(result.total))}
@@ -187,16 +191,17 @@ function classReport() {
       <td>${points(mark?.objective ?? null, 7)}</td>
       <td>${points(mark?.accuracy ?? null, 4)}</td>
       <td>${points(mark?.shootingTime ?? null, 2)}</td>
-      <td>${points(student.investment ?? null, 4)}</td></tr>`;
+      <td><input data-investment="${student.id}" inputmode="decimal" aria-label="Investissement sur 4 · ${e(fullName(student))}" value="${e(student.investment?.toString().replace('.', ','))}" placeholder="—"></td>
+      <td class="final-mark" data-final-mark>${points(mark?.total ?? null, 20)}</td></tr>`;
   }).join('');
   return classPicker() + `<section class="panel"><h2 id="class-report-title">Bilan de classe · ${e(group.name)}</h2>
     <div class="class-report-scroll" role="region" aria-labelledby="class-report-title" tabindex="0">
       <table class="class-report-table" aria-labelledby="class-report-title">
         <thead><tr><th scope="col">Élève</th><th scope="col">Vitesse / 3</th><th scope="col">Objectif individuel / 7</th>
-          <th scope="col">Réussite au tir / 4</th><th scope="col">Temps au tir / 2</th><th scope="col">Investissement sur le cycle / 4</th></tr></thead>
+          <th scope="col">Réussite au tir / 4</th><th scope="col">Temps au tir / 2</th><th scope="col">Investissement sur le cycle / 4</th><th scope="col">Note finale / 20</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-    </div><small>Un tiret indique une donnée à renseigner.</small>
+    </div><small>L’investissement s’enregistre quand tu quittes la case. Un tiret indique une donnée à renseigner.</small>
   </section>`;
 }
 
@@ -235,16 +240,16 @@ document.addEventListener('click', event => {
     input.dispatchEvent(new Event('input', {bubbles:true}));
     return;
   }
-  const {view: destination, go: jump, edit, open, delete: deleteId, action} = button.dataset;
+  const {view: destination, go: jump, edit, open, neighbor, delete: deleteId, action} = button.dataset;
   if (destination || jump) go(destination || jump);
   if (edit || action === 'cancel') {
     editingId = edit || undefined;
     render();
     if (edit) document.querySelector('#student-form input').focus();
   }
-  if (open) {
-    studentId = open;
-    go('entry');
+  if (open || neighbor) {
+    studentId = open || neighbor;
+    go(open ? 'entry' : view);
   }
   if (deleteId) {
     const student = currentClass()?.students.find(item => item.id === deleteId);
@@ -263,11 +268,40 @@ screen.addEventListener('input', event => {
   if (form?.id === 'result-form') {
     resultDrafts.set(studentId, Object.fromEntries(new FormData(form)));
   }
-  if (event.target.dataset.reference) event.target.removeAttribute('aria-invalid');
+  if (event.target.dataset.reference || event.target.dataset.investment) event.target.removeAttribute('aria-invalid');
+});
+
+screen.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && event.target.dataset.investment) {
+    event.preventDefault();
+    event.target.blur();
+  }
 });
 
 screen.addEventListener('change', event => {
   const input = event.target;
+  const investmentId = input.dataset.investment;
+  if (investmentId) {
+    const student = currentClass().students.find(item => item.id === investmentId);
+    let investment;
+    try {
+      investment = parseInvestment(input.value);
+    } catch (error) {
+      input.setAttribute('aria-invalid', 'true');
+      status.textContent = error.message;
+      return;
+    }
+    if (!mutateClass(classId, group => {
+      group.students.find(item => item.id === investmentId).investment = investment;
+    }, 'Investissement enregistré.')) {
+      input.value = student.investment?.toString().replace('.', ',') ?? '';
+      return;
+    }
+    const updated = {...student, investment};
+    const mark = student.result ? grade(updated, analyse(student.reference, student.result)) : null;
+    input.closest('tr').querySelector('[data-final-mark]').textContent = points(mark?.total ?? null, 20);
+    return;
+  }
   const scaleId = input.dataset.runningScale;
   if (scaleId) {
     const student = currentClass().students.find(item => item.id === scaleId);
@@ -312,6 +346,15 @@ function getTime(form, field, label, optional = false) {
   return time;
 }
 
+function parseInvestment(value) {
+  const raw = String(value ?? '').trim();
+  const investment = raw ? Number(raw.replace(',', '.')) : null;
+  if (raw && (!/^\d+(?:[,.]\d+)?$/.test(raw) || !Number.isFinite(investment) || investment > 4)) {
+    throw new Error('Saisis une note d’investissement entre 0 et 4.');
+  }
+  return investment;
+}
+
 function mutateClass(id, change, message) {
   return update(groups => change(groups.find(group => group.id === id)), message);
 }
@@ -353,11 +396,7 @@ screen.addEventListener('submit', async event => {
         button.disabled = false;
       }
     } else if (target.id === 'grade-form') {
-      const raw = String(form.get('investment') ?? '').trim();
-      const investment = raw ? Number(raw.replace(',', '.')) : null;
-      if (raw && (!/^\d+(?:[,.]\d+)?$/.test(raw) || !Number.isFinite(investment) || investment > 4)) {
-        throw new Error('Saisis une note d’investissement entre 0 et 4.');
-      }
+      const investment = parseInvestment(form.get('investment'));
       if (!mutateClass(groupId, group => {
         group.students.find(item => item.id === studentId).investment = investment;
       }, 'Investissement enregistré.')) return;

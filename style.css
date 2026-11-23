@@ -91,3 +91,6 @@ nav{grid-template-columns:repeat(4,minmax(0,1fr))}
 .class-report-table thead{background:#f8f2ef}
 .class-report-table th:first-child{text-align:left}
 .class-report-table td{white-space:nowrap;font-variant-numeric:tabular-nums}
+.class-report-table td input{width:5rem;text-align:center}
+.class-report-table td input[aria-invalid="true"]{border:2px solid #a22517}
+.class-report-table .final-mark{font-weight:750;background:#f8f2ef}

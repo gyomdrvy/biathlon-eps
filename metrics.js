@@ -58,7 +58,7 @@ export function grade(student, metrics) {
     : null;
   const delay = metrics.target ? metrics.timeGap / metrics.target : null;
   const objective = delay === null ? null
-    : [0, 0.05, 0.10, 0.15, 0.20].filter(threshold => delay <= threshold + 1e-10).length * 1.4;
+    : [0, 0.08, 0.16, 0.24, 0.32, 0.40, 0.48].filter(threshold => delay <= threshold + 1e-10).length;
   const countsKnown = result.shots.every(shot => Number.isSafeInteger(shot.attempts) && shot.attempts >= shot.hits);
   const attempts = result.shots.reduce((sum, shot) => sum + (shot.attempts ?? 0), 0);
   const accuracy = countsKnown ? (attempts ? 4 * metrics.hits / attempts : 0) : null;
