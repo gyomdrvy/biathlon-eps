@@ -79,7 +79,7 @@ export async function readRoster(file) {
       const timeFormat = [18,19,20,21,22,45,46,47].includes(formatId) || /h+\s*:|m+\s*:s+|\[s+\]/i.test(formats.get(formatId) ?? '');
       if (type === 's') columns[col] = shared[Number(raw)];
       else if (type === 'inlineStr') columns[col] = cellText(cell);
-      else if ((!type || type === 'n') && raw !== '' && timeFormat) columns[col] = Math.round(Number(raw) * 8640000) / 100;
+      else if ((!type || type === 'n') && raw !== '' && Number.isFinite(Number(raw))) columns[col] = timeFormat ? Math.round(Number(raw) * 8640000) / 100 : Number(raw);
       else columns[col] = raw;
     }
     return {columns, number: row.getAttribute('r')};
@@ -100,7 +100,8 @@ export async function readRoster(file) {
     const raw = String(columns[reference] ?? '').trim();
     if (!surname && !given && !raw) continue;
     if (!surname || !given) throw new Error(`Ligne ${number} · nom et prénom requis.`);
-    const seconds = raw ? parseTime(raw) : null;
+    const cell = columns[reference];
+    const seconds = typeof cell === 'number' ? cell : raw ? parseTime(raw.replace(':', '.')) : null;
     if (raw && (!Number.isFinite(seconds) || seconds <= 0)) throw new Error(`Ligne ${number} · référence 200 m invalide.`);
     students.push({last: surname, first: given, reference: seconds});
   }

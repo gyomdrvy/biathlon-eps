@@ -1,4 +1,4 @@
-import {analyse, formatTime, parseTime, shotAccuracy, SHOOT_TARGET} from './metrics.js';
+import {analyse, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
 
 const KEY = 'biathlon-eps-classes-v1';
@@ -41,7 +41,6 @@ const currentClass = () => data.find(group => group.id === classId);
 const currentStudent = () => currentClass()?.students.find(student => student.id === studentId);
 const fullName = student => `${student.first} ${student.last}`;
 const decimal = value => value.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-const inputTime = value => value == null ? '' : String(value).replace('.', ',');
 const signedTime = value => `${value > 0 ? '+' : value < 0 ? '−' : ''}${formatTime(value)}`;
 const signedSpeed = value => `${value > 0 ? '+' : value < 0 ? '−' : ''}${decimal(Math.abs(value))} km/h`;
 const labelOption = (id, name, selected) => `<option value="${id}" ${selected ? 'selected' : ''}>${e(name)}</option>`;
@@ -75,10 +74,22 @@ function classes() {
     <section class="panel"><h2>Importer depuis Excel</h2><p class="muted">Première feuille du fichier .xlsx. Colonnes Nom, Prénom et, si disponible, Référence 200 m.</p>
     <form id="import-form"><div class="grid"><label>Classeur Excel<input type="file" name="file" accept=".xlsx" required></label></div><div class="actions"><button class="primary">Importer dans ${e(group.name)}</button><a href="./modele-classe.xlsx" download>Modèle Excel</a></div></form></section>
     <section class="panel"><h2>Élèves · ${group.students.length}</h2>
-    ${group.students.length ? '<p class="muted">Référence sur 200 m en secondes (42,5) ou en minutes:secondes (0:42). La saisie s’enregistre quand tu quittes le champ.</p>' : ''}
+    ${group.students.length ? '<p class="muted">Référence sur 200 m en secondes (42,5) ou en minutes.secondes (0.42). La saisie s’enregistre quand tu quittes le champ.</p>' : ''}
     ${group.students.length ? group.students.map(item => `<div class="row student-row"><strong>${e(fullName(item))}</strong>
     <label>Référence 200 m<input data-reference="${item.id}" aria-label="Référence 200 m · ${e(fullName(item))}" inputmode="decimal" value="${inputTime(item.reference)}" placeholder="Ex. 42,5"></label>
     <div class="actions"><button data-edit="${item.id}">Modifier</button><button data-open="${item.id}">Épreuve</button><button class="danger" data-delete="${item.id}" aria-label="Supprimer ${e(fullName(item))}">Supprimer</button></div></div>`).join('') : '<p class="muted">Ajoute un élève ou importe une liste.</p>'}</section>` : ''}`;
+}
+
+function targetPicker(index, hits) {
+  return `<fieldset class="target-picker"><legend>Cibles touchées</legend>
+    <input type="hidden" name="hits${index}" value="${e(hits)}">
+    <div class="target-buttons">${Array.from({length:5}, (_, i) => {
+      const count = i + 1;
+      return `<button type="button" class="target-button" data-hits="${count}" aria-label="${count} sur 5" aria-pressed="${Number(hits) === count}" data-filled="${count <= Number(hits)}"></button>`;
+    }).join('')}</div>
+    <div class="target-controls"><button type="button" data-hits="0" aria-pressed="${String(hits) === '0'}">0 cible</button>
+    <span class="target-count" aria-live="polite">${hits == null || hits === '' ? '—' : hits} / 5</span></div>
+  </fieldset>`;
 }
 
 function entry(student) {
@@ -91,13 +102,13 @@ function entry(student) {
   <button data-open="${students[index - 1]?.id ?? ''}" ${index === 0 ? 'disabled' : ''}>Précédent</button>
   <div class="student-position"><strong>${e(fullName(student))}</strong><small>${index + 1} / ${students.length}</small></div>
   <button data-open="${students[index + 1]?.id ?? ''}" ${index === students.length - 1 ? 'disabled' : ''}>Suivant</button></div>
-  <h2>Saisir l’épreuve</h2><p class="muted">En secondes (ex. 32,5) ou en minutes:secondes (ex. 4:48).</p>
-  <form id="result-form"><div class="grid"><label>Temps total, tir compris<input name="total" required value="${fieldTime('total', result?.total)}" placeholder="Ex. 4:48"></label></div>
+  <h2>Saisir l’épreuve</h2><p class="muted">En secondes (ex. 32,5) ou en minutes.secondes (ex. 4.48).</p>
+  <form id="result-form"><div class="grid"><label>Temps total, tir compris<input name="total" inputmode="decimal" required value="${fieldTime('total', result?.total)}" placeholder="Ex. 4.48"></label></div>
   <div class="shots">${Array.from({length:4}, (_, index) => {
     const shot = result?.shots[index];
     return `<section class="card"><h3>Passage ${index + 1}</h3>
       <label>Temps au tir<input name="time${index}" required inputmode="decimal" value="${fieldTime('time' + index, shot?.time)}" placeholder="Ex. 30"></label>
-      <label>Cibles touchées<select name="hits${index}" required><option value="">Choisir</option>${Array.from({length:6}, (_, hits) => labelOption(hits, `${hits} / 5`, draft ? String(hits) === draft['hits' + index] : hits === shot?.hits)).join('')}</select></label>
+      ${targetPicker(index, draft ? draft['hits' + index] : shot?.hits)}
       <label>Tirs réalisés<input name="attempts${index}" required inputmode="numeric" pattern="[0-9]+" value="${e(draft ? draft['attempts' + index] : shot?.attempts)}" placeholder="Ex. 8"></label></section>`;
   }).join('')}</div>
   <button class="primary">Enregistrer et voir le bilan</button></form></section>`;
@@ -115,6 +126,7 @@ function report(student) {
   ${metric('Vitesse globale', decimal(m.eventSpeed) + ' km/h', 'Temps total · ' + formatTime(result.total))}
   ${metric('Vitesse cible', m.target ? decimal(m.targetSpeed) + ' km/h' : 'À définir', m.target ? 'Temps cible · ' + formatTime(m.target) : 'Référence 200 m à renseigner')}
   ${metric('Écart à la cible', m.target ? signedTime(m.timeGap) : '—', m.target ? signedSpeed(m.eventSpeed - m.targetSpeed) + ' par rapport à la cible' : 'Calculé avec la référence 200 m')}
+  ${metric('Réussite au tir', totalShotAccuracy(result.shots), 'Cibles touchées ÷ total des tirs réalisés')}
   </div><details><summary>Détail des calculs</summary><p>Vitesse de course = 800 m ÷ (temps total − temps passé au tir). Vitesse globale = 800 m ÷ temps total. Temps cible = 4 × référence sur 200 m + 4 × 30 s. Vitesse cible = 800 m ÷ temps cible. Les vitesses sont converties en km/h.</p></details></section>
   <section class="panel"><h2>Passages au tir</h2><p class="muted">Temps total au tir <strong>${formatTime(m.shooting)}</strong> · Cibles touchées <strong>${m.hits} / 20</strong></p>
   <div class="bars">${result.shots.map((shot, index) => `<div class="bar-row"><span>Tir ${index + 1}</span><div class="bar" aria-hidden="true"><i style="width:${100 * shot.time / maxShot}%"></i></div><strong>${formatTime(shot.time)}</strong></div>`).join('')}</div>
@@ -146,6 +158,18 @@ function go(target) {
 document.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button) return;
+  if (button.dataset.hits !== undefined) {
+    const picker = button.closest('.target-picker');
+    const input = picker.querySelector('input');
+    input.value = button.dataset.hits;
+    for (const target of picker.querySelectorAll('[data-hits]')) {
+      target.setAttribute('aria-pressed', String(target === button));
+      target.dataset.filled = String(Number(target.dataset.hits) <= Number(input.value));
+    }
+    picker.querySelector('.target-count').textContent = input.value + ' / 5';
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+    return;
+  }
   const {view: destination, go: jump, edit, open, delete: deleteId, action} = button.dataset;
   if (destination || jump) go(destination || jump);
   if (edit || action === 'cancel') {
@@ -185,7 +209,7 @@ screen.addEventListener('change', event => {
     const reference = raw ? parseTime(raw) : null;
     if (raw && (!Number.isFinite(reference) || reference <= 0)) {
       input.setAttribute('aria-invalid', 'true');
-      status.textContent = 'Référence 200 m invalide. Saisis une durée positive, par exemple 42,5 ou 0:42.';
+      status.textContent = 'Référence 200 m invalide. Saisis une durée positive, par exemple 42,5 ou 0.42.';
       return;
     }
     const student = currentClass().students.find(item => item.id === referenceId);

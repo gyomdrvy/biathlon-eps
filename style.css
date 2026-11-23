@@ -70,3 +70,14 @@ button.danger{color:#a22517}
 @media(max-width:390px){.student-nav button{padding-inline:7px}.student-nav{gap:5px}}
 .shot-score{display:flex;align-items:baseline;flex-wrap:wrap;column-gap:8px}
 .shot-score span{color:var(--red);font-size:.92rem;font-weight:700;white-space:nowrap}
+.stats{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media(max-width:850px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.target-picker{margin:8px 0;padding:0;border:0;min-width:0}
+.target-picker legend{padding:0;font-size:.92rem;font-weight:650}
+.target-buttons{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));max-width:235px;gap:2px}
+.target-button{display:grid;place-items:center;padding:0}
+.target-button::before{content:"";width:20px;aspect-ratio:1;border:2px solid #29221f;border-radius:50%;background:radial-gradient(circle,#29221f 0 2px,transparent 3px 4px,#29221f 5px 6px,transparent 7px)}
+.target-button[data-filled="true"]::before{background:#29221f}
+.target-controls{display:flex;align-items:center;gap:8px;margin-top:4px}
+.target-count{font-size:.92rem;font-weight:700}
+@media(max-width:420px){#result-form .shots{grid-template-columns:1fr}}
