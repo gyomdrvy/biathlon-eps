@@ -27,3 +27,9 @@ export function analyse(reference, result) {
     timeGap: target ? result.total - target : null,
     shotGap: result.shots[3].time - result.shots[0].time };
 }
+
+const percent = new Intl.NumberFormat('fr-FR', {style: 'percent', maximumFractionDigits: 1});
+
+export function shotAccuracy({hits, attempts}) {
+  return attempts > 0 ? percent.format(hits / attempts) : '—';
+}

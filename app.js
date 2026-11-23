@@ -1,4 +1,4 @@
-import {analyse, formatTime, parseTime, SHOOT_TARGET} from './metrics.js';
+import {analyse, formatTime, parseTime, shotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
 
 const KEY = 'biathlon-eps-classes-v1';
@@ -97,7 +97,8 @@ function entry(student) {
     const shot = result?.shots[index];
     return `<section class="card"><h3>Passage ${index + 1}</h3>
       <label>Temps au tir<input name="time${index}" required inputmode="decimal" value="${fieldTime('time' + index, shot?.time)}" placeholder="Ex. 30"></label>
-      <label>Cibles touchées<select name="hits${index}" required><option value="">Choisir</option>${Array.from({length:6}, (_, hits) => labelOption(hits, `${hits} / 5`, draft ? String(hits) === draft['hits' + index] : hits === shot?.hits)).join('')}</select></label></section>`;
+      <label>Cibles touchées<select name="hits${index}" required><option value="">Choisir</option>${Array.from({length:6}, (_, hits) => labelOption(hits, `${hits} / 5`, draft ? String(hits) === draft['hits' + index] : hits === shot?.hits)).join('')}</select></label>
+      <label>Tirs réalisés<input name="attempts${index}" required inputmode="numeric" pattern="[0-9]+" value="${e(draft ? draft['attempts' + index] : shot?.attempts)}" placeholder="Ex. 8"></label></section>`;
   }).join('')}</div>
   <button class="primary">Enregistrer et voir le bilan</button></form></section>`;
 }
@@ -118,7 +119,7 @@ function report(student) {
   <section class="panel"><h2>Passages au tir</h2><p class="muted">Temps total au tir <strong>${formatTime(m.shooting)}</strong> · Cibles touchées <strong>${m.hits} / 20</strong></p>
   <div class="bars">${result.shots.map((shot, index) => `<div class="bar-row"><span>Tir ${index + 1}</span><div class="bar" aria-hidden="true"><i style="width:${100 * shot.time / maxShot}%"></i></div><strong>${formatTime(shot.time)}</strong></div>`).join('')}</div>
   <p>Évolution du premier au dernier passage <strong>${signedTime(m.shotGap)}</strong></p>
-  <div class="shots">${result.shots.map((shot, index) => `<div class="card"><small>Tir ${index + 1}</small><strong>${shot.hits} / 5</strong><small>${signedTime(shot.time - SHOOT_TARGET)} par rapport à 30 s</small>
+  <div class="shots">${result.shots.map((shot, index) => `<div class="card"><small>Tir ${index + 1}</small><div class="shot-score"><strong>${shot.hits} / 5</strong><span aria-label="Réussite au tir : ${shotAccuracy(shot)}">${shotAccuracy(shot)}</span></div><small>${signedTime(shot.time - SHOOT_TARGET)} par rapport à 30 s</small>
   <div class="hits" aria-hidden="true">${Array.from({length:5}, (_, i) => `<i class="${i < shot.hits ? 'on' : ''}"></i>`).join('')}</div></div>`).join('')}</div>
   <button data-go="entry">Modifier la saisie</button></section>`;
 }
@@ -256,10 +257,20 @@ screen.addEventListener('submit', async event => {
       const total = getTime(form, 'total', 'Temps total');
       const shots = Array.from({length:4}, (_, i) => ({
         time: getTime(form, 'time' + i, `Temps du passage ${i + 1}`),
-        hits: Number(form.get('hits' + i))
+        hits: Number(form.get('hits' + i)),
+        attempts: Number(form.get('attempts' + i))
       }));
       if (shots.some((shot, index) => form.get('hits' + index) === '' || !Number.isInteger(shot.hits) || shot.hits < 0 || shot.hits > 5)) {
         throw new Error('Choisis le nombre de cibles touchées pour chaque passage.');
+      }
+      for (const [index, shot] of shots.entries()) {
+        const rawAttempts = form.get('attempts' + index);
+        if (!/^[0-9]+$/.test(rawAttempts ?? '') || !Number.isSafeInteger(shot.attempts)) {
+          throw new Error(`Passage ${index + 1} · saisis un nombre entier de tirs réalisés (0 ou plus).`);
+        }
+        if (shot.attempts < shot.hits) {
+          throw new Error(`Passage ${index + 1} · le nombre de tirs doit être au moins égal au nombre de cibles touchées.`);
+        }
       }
       if (total - shots.reduce((sum, shot) => sum + shot.time, 0) < 0.000001) {
         throw new Error('Le temps total doit dépasser la somme des quatre temps de tir.');

@@ -68,3 +68,5 @@ button.danger{color:#a22517}
 .student-position{text-align:center}
 @media(max-width:650px){.student-row{grid-template-columns:minmax(0,1fr) minmax(110px,160px)}.student-row .actions{grid-column:1/-1}}
 @media(max-width:390px){.student-nav button{padding-inline:7px}.student-nav{gap:5px}}
+.shot-score{display:flex;align-items:baseline;flex-wrap:wrap;column-gap:8px}
+.shot-score span{color:var(--red);font-size:.92rem;font-weight:700;white-space:nowrap}
