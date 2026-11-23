@@ -130,8 +130,8 @@ const points = (value, max) => value === null ? '—' : `${pointFormat.format(va
 function gradePanel(student, metrics) {
   const mark = grade(student, metrics);
   const items = [
-    ['Vitesse hors tir', mark.speed, 3],
-    ['Objectif individuel', mark.objective, 7],
+    ['Vitesse hors tir', mark.speed, 5],
+    ['Objectif individuel', mark.objective, 5],
     ['Réussite au tir', mark.accuracy, 4],
     ['Temps de tir', mark.shootingTime, 2],
     ['Sous-total épreuve', mark.subtotal, 16],
@@ -148,10 +148,10 @@ function gradePanel(student, metrics) {
       <label>Investissement sur le cycle / 4<input name="investment" inputmode="decimal" value="${e(student.investment?.toString().replace('.', ','))}" placeholder="Ex. 3,5"></label>
     </div><button class="primary">Enregistrer l’investissement</button></form>
     <details><summary>Voir les seuils du barème</summary>
-      <p>Vitesse hors tir · 0,6 point par seuil atteint. Garçons · 9, 10,5, 12, 13,5 et 15 km/h. Filles · 8, 9,5, 11, 12,5 et 14 km/h.</p>
-      <p>Objectif individuel · 7 points si le temps cible est atteint ou battu. En cas de retard, 6 points jusqu’à 8 %, 5 jusqu’à 16 %, 4 jusqu’à 24 %, 3 jusqu’à 32 %, 2 jusqu’à 40 %, 1 jusqu’à 48 %, puis 0.</p>
-      <p>Réussite · 4 × cibles touchées ÷ tirs réalisés. Si aucun tir n’a été réalisé, 0 point.</p>
-      <p>Temps de tir · à partir de 12 cibles touchées, 2 points jusqu’à 2.00, 1,5 jusqu’à 2.15, 1 jusqu’à 2.30, 0,5 jusqu’à 2.45, puis 0.</p>
+      <p>Vitesse hors tir · 5 points dès 16 km/h pour les garçons et 15 km/h pour les filles. Chaque palier de 1 km/h en dessous retire 0,5 point. Sous 7 km/h pour les garçons et 6 km/h pour les filles, la note est de 0.</p>
+      <p>Objectif individuel · 5 points si l’objectif est atteint, battu ou manqué de moins de 10 %. Puis 4,5 points sous 20 %, 4 sous 30 %, 3,5 sous 40 %, 3 sous 50 %, 2,5 sous 60 %, 2 sous 70 %, 1,5 sous 80 %, 1 sous 90 %, 0,5 sous 100 %, puis 0.</p>
+      <p>Réussite · 4 points dès 80 %, 3,5 dès 70 %, 3 dès 60 %, 2,5 dès 50 %, 2 dès 40 %, 1,5 dès 30 %, 1 dès 20 %, 0,5 dès 10 % et 0 en dessous ou sans tir.</p>
+      <p>Temps de tir · 2 points en moins de 2.00, 1,5 en moins de 2.40, 1 en moins de 3.20, 0,5 en moins de 4.00, puis 0.</p>
     </details>
   </section>`;
 }
@@ -179,25 +179,49 @@ function report(student) {
   <button data-go="entry">Modifier la saisie</button></section>`;
 }
 
+function studentGrade(student) {
+  return student.result ? grade(student, analyse(student.reference, student.result)) : null;
+}
+
+function classAverages(students, grades) {
+  const criteria = [
+    ['Vitesse hors tir', 5, grades.map(mark => mark?.speed)],
+    ['Objectif individuel', 5, grades.map(mark => mark?.objective)],
+    ['Réussite au tir', 4, grades.map(mark => mark?.accuracy)],
+    ['Temps au tir', 2, grades.map(mark => mark?.shootingTime)],
+    ['Investissement', 4, students.map(student => student.investment)],
+    ['Note finale', 20, grades.map(mark => mark?.total)]
+  ];
+  return criteria.map(([label, max, values]) => {
+    const scores = values.filter(Number.isFinite);
+    const mean = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null;
+    return `<div class="card ${max === 20 ? 'class-average-final' : ''}"><small>${label}</small>
+      <strong>${points(mean, max)}</strong><small>${scores.length} / ${students.length} élèves</small></div>`;
+  }).join('');
+}
+
 function classReport() {
   const group = currentClass();
   if (!group?.students.length) {
     return classPicker() + '<section class="panel"><h2>Bilan de classe</h2><p>Aucun élève à afficher.</p></section>';
   }
-  const rows = group.students.map(student => {
-    const mark = student.result ? grade(student, analyse(student.reference, student.result)) : null;
+  const grades = group.students.map(studentGrade);
+  const rows = group.students.map((student, index) => {
+    const mark = grades[index];
     return `<tr><th scope="row">${e(fullName(student))}</th>
-      <td>${points(mark?.speed ?? null, 3)}</td>
-      <td>${points(mark?.objective ?? null, 7)}</td>
+      <td>${points(mark?.speed ?? null, 5)}</td>
+      <td>${points(mark?.objective ?? null, 5)}</td>
       <td>${points(mark?.accuracy ?? null, 4)}</td>
       <td>${points(mark?.shootingTime ?? null, 2)}</td>
       <td><input data-investment="${student.id}" inputmode="decimal" aria-label="Investissement sur 4 · ${e(fullName(student))}" value="${e(student.investment?.toString().replace('.', ','))}" placeholder="—"></td>
       <td class="final-mark" data-final-mark>${points(mark?.total ?? null, 20)}</td></tr>`;
   }).join('');
   return classPicker() + `<section class="panel"><h2 id="class-report-title">Bilan de classe · ${e(group.name)}</h2>
+    <h3 class="class-averages-title">Moyennes de la classe</h3>
+    <div class="class-averages" id="class-averages" aria-live="polite">${classAverages(group.students, grades)}</div>
     <div class="class-report-scroll" role="region" aria-labelledby="class-report-title" tabindex="0">
       <table class="class-report-table" aria-labelledby="class-report-title">
-        <thead><tr><th scope="col">Élève</th><th scope="col">Vitesse / 3</th><th scope="col">Objectif individuel / 7</th>
+        <thead><tr><th scope="col">Élève</th><th scope="col">Vitesse / 5</th><th scope="col">Objectif individuel / 5</th>
           <th scope="col">Réussite au tir / 4</th><th scope="col">Temps au tir / 2</th><th scope="col">Investissement sur le cycle / 4</th><th scope="col">Note finale / 20</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -297,9 +321,11 @@ screen.addEventListener('change', event => {
       input.value = student.investment?.toString().replace('.', ',') ?? '';
       return;
     }
-    const updated = {...student, investment};
-    const mark = student.result ? grade(updated, analyse(student.reference, student.result)) : null;
+    const students = currentClass().students;
+    const grades = students.map(studentGrade);
+    const mark = grades[students.findIndex(item => item.id === investmentId)];
     input.closest('tr').querySelector('[data-final-mark]').textContent = points(mark?.total ?? null, 20);
+    screen.querySelector('#class-averages').innerHTML = classAverages(students, grades);
     return;
   }
   const scaleId = input.dataset.runningScale;

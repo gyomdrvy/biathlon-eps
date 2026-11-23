@@ -94,3 +94,8 @@ nav{grid-template-columns:repeat(4,minmax(0,1fr))}
 .class-report-table td input{width:5rem;text-align:center}
 .class-report-table td input[aria-invalid="true"]{border:2px solid #a22517}
 .class-report-table .final-mark{font-weight:750;background:#f8f2ef}
+.class-averages-title{margin-top:14px}
+.class-averages{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:8px 0 16px}
+.class-averages .class-average-final{border-color:#e5a89a;background:#ffece6}
+@media(max-width:850px){.class-averages{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:480px){.class-averages{grid-template-columns:repeat(2,minmax(0,1fr))}}

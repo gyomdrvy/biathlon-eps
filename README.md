@@ -25,10 +25,18 @@ Dans le bilan de l’épreuve, la réussite globale correspond au total des cibl
 
 ## Évaluation sur 20
 
-Dans la liste des élèves, choisis Fille ou Garçon avant la référence 200 m. Le choix du barème de vitesse s’enregistre automatiquement. Dans le bilan individuel, saisis la note manuelle d’investissement sur 4. Le détail affiche les seuils de vitesse sur 3, l’objectif individuel sur 7, la réussite au tir sur 4 et le temps de tir sur 2. La note finale apparaît quand les données des quatre critères et l’investissement sont renseignés.
+Dans la liste des élèves, choisis Fille ou Garçon avant la référence 200 m. Le choix du barème de vitesse s’enregistre automatiquement. Dans le bilan individuel, saisis la note manuelle d’investissement sur 4. Le détail affiche les seuils de vitesse sur 5, l’objectif individuel sur 5, la réussite au tir sur 4 et le temps de tir sur 2. La note finale apparaît quand les données des quatre critères et l’investissement sont renseignés.
 
 L’onglet **Bilan de classe** récapitule les cinq critères pour chaque élève de la classe sélectionnée.
 
 Le **Bilan individuel** propose les boutons **Précédent** et **Suivant**. Le **Bilan de classe** permet de saisir l’investissement directement dans le tableau et affiche la note finale sur 20 dès que les cinq critères sont renseignés. L’investissement s’enregistre en quittant la case ou en appuyant sur Entrée.
 
-Objectif individuel sur 7 · 7 points si l’objectif est atteint ou battu, puis 6, 5, 4, 3, 2 et 1 point jusqu’à 8 %, 16 %, 24 %, 32 %, 40 % et 48 % de retard inclus, puis 0.
+Vitesse hors tir sur 5 · 5 points dès 16 km/h pour les garçons et 15 km/h pour les filles. Chaque palier de 1 km/h en dessous retire 0,5 point, avec un minimum de 0.
+
+Objectif individuel sur 5 · 5 points sous 10 % de retard, puis un demi-point de moins par tranche de 10 %, jusqu’à 0,5 point de 90 % à moins de 100 %. À partir de 100 %, 0 point.
+
+Réussite au tir · 4 points dès 80 %, puis un demi-point de moins par tranche de 10 %. Sous 10 %, 0 point.
+
+Temps total au tir · 2 points en moins de 2.00, 1,5 en moins de 2.40, 1 en moins de 3.20, 0,5 en moins de 4.00, puis 0.
+
+En haut du **Bilan de classe**, les moyennes des cinq critères et de la note finale comptent les notes disponibles, y compris les zéros. Chaque carte indique l’effectif pris en compte.

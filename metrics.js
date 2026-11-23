@@ -54,17 +54,17 @@ export function grade(student, metrics) {
   const {result, runningScale, investment} = student;
   const offset = runningScale === 'girls' ? 1 : 0;
   const speed = ['girls', 'boys'].includes(runningScale)
-    ? [9, 10.5, 12, 13.5, 15].filter(threshold => metrics.runningSpeed >= threshold - offset).length * 0.6
+    ? Math.max(0, Math.min(5, (Math.floor(metrics.runningSpeed) + offset - 6) * 0.5))
     : null;
   const delay = metrics.target ? metrics.timeGap / metrics.target : null;
   const objective = delay === null ? null
-    : [0, 0.08, 0.16, 0.24, 0.32, 0.40, 0.48].filter(threshold => delay <= threshold + 1e-10).length;
+    : [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].filter(threshold => delay < threshold / 100 - 1e-10).length * 0.5;
   const countsKnown = result.shots.every(shot => Number.isSafeInteger(shot.attempts) && shot.attempts >= shot.hits);
   const attempts = result.shots.reduce((sum, shot) => sum + (shot.attempts ?? 0), 0);
-  const accuracy = countsKnown ? (attempts ? 4 * metrics.hits / attempts : 0) : null;
-  const shootingTime = metrics.hits >= 12
-    ? [120, 135, 150, 165].filter(limit => metrics.shooting <= limit + 1e-8).length * 0.5
-    : 0;
+  const accuracy = countsKnown
+    ? (attempts > 0 ? [1, 2, 3, 4, 5, 6, 7, 8].filter(level => 10 * metrics.hits >= level * attempts).length * 0.5 : 0)
+    : null;
+  const shootingTime = [120, 160, 200, 240].filter(limit => metrics.shooting < limit - 1e-8).length * 0.5;
   const parts = [speed, objective, accuracy, shootingTime];
   const subtotal = parts.includes(null) ? null : parts.reduce((sum, points) => sum + points, 0);
   const total = subtotal !== null && investment != null ? subtotal + investment : null;
