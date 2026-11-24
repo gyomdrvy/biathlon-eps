@@ -46,3 +46,11 @@ En haut du **Bilan de classe**, les moyennes des cinq critères et de la note fi
 Dans **Bilan de classe**, **Sauvegarder la classe (JSON)** enregistre la liste des élèves, les références, les résultats enregistrés de l’épreuve et l’investissement. Dans **Classes**, **Réimporter la classe** ouvre cette sauvegarde dans une nouvelle classe. Les copies d’une classe existante reçoivent un numéro.
 
 **Exporter vers iDoceo (CSV)** télécharge un fichier contenant le nom, le prénom, les cinq critères et la note finale sur 20. Les notes non renseignées restent vides. Dans l’assistant d’importation iDoceo, associe les colonnes Nom et Prénom et sélectionne les colonnes de notes à importer.
+
+## Séances
+
+L’onglet **Évaluation** conserve la saisie de l’épreuve notée sur 20. Les **Séances** permettent de créer plusieurs épreuves pour une même séance en reprenant le même nom de séance. Chaque épreuve accepte des boucles de 200 m, des passages au tir ou les deux. En binôme, les élèves alternent les boucles et le premier nommé effectue la boucle supplémentaire si le nombre est impair.
+
+Le classement net est établi au temps total. En tir seul, davantage de touches donne un meilleur rang, puis le temps total départage les égalités. Le classement au projet utilise l’écart absolu au temps cible. Le temps cible additionne les références individuelles pour les boucles attribuées et 30 secondes par passage au tir. Il est mémorisé avec le résultat. Un résultat sans référence suffisante reste visible dans le classement net.
+
+À la création de l’épreuve, choisis si le classement net ou au projet attribue les points. Le premier reçoit autant de points que l’effectif de la classe à la création, puis un point de moins par place. Chaque partenaire reçoit les points de son binôme. Les épreuves d’une même séance sont additionnées. Le classement des équipes additionne les points des membres actuels. La sauvegarde JSON inclut également les séances et les équipes.

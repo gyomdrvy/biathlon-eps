@@ -1,3 +1,5 @@
+import {restoreTraining} from './sessions.js';
+
 const format = 'biathlon-eps-class';
 const version = 1;
 
@@ -10,7 +12,7 @@ export function readClassBackup(source, newId) {
   if (fileFormat !== format || fileVersion !== version || !name(group?.name) || !Array.isArray(group.students)) {
     throw new Error('Choisis un fichier de sauvegarde Biathlon EPS valide.');
   }
-  return {id: newId(), name: group.name, students: group.students.map(student => {
+  const restoredGroup = {id: newId(), name: group.name, students: group.students.map(student => {
     const {first, last, reference, runningScale, investment, result} = student ?? {};
     if (!name(first) || !name(last) || (reference != null && !positive(reference))
       || (runningScale != null && !['girls', 'boys'].includes(runningScale))
@@ -24,6 +26,7 @@ export function readClassBackup(source, newId) {
     }
     return restored;
   })};
+  return restoreTraining(group, restoredGroup, newId);
 }
 
 const name = value => typeof value === 'string' && value.trim().length > 0;

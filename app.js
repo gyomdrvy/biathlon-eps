@@ -1,6 +1,7 @@
 import {analyse, grade, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
 import {backupClass, readClassBackup, gradebookCsv} from './transfers.js';
+import {createTraining, removeTrainingStudent} from './sessions.js';
 
 const KEY = 'biathlon-eps-classes-v1';
 const screen = document.querySelector('#screen');
@@ -47,6 +48,8 @@ const signedSpeed = value => `${value > 0 ? '+' : value < 0 ? '−' : ''}${decim
 const labelOption = (id, name, selected) => `<option value="${id}" ${selected ? 'selected' : ''}>${e(name)}</option>`;
 const newId = () => crypto.randomUUID();
 
+const training = createTraining({currentClass, mutateClass, render, e, fullName, newId, labelOption});
+
 function classPicker() {
   if (!data.length) return '';
   const group = currentClass();
@@ -65,7 +68,7 @@ function classes() {
     <form id="new-class"><div class="grid"><label>Nom de la classe<input name="name" required maxlength="70" placeholder="Ex. 3e A"></label></div>
     <button class="primary">Créer la classe</button></form></section>
   <section class="panel"><h2>Restaurer une sauvegarde</h2>
-    <p>Importe un fichier JSON de Biathlon EPS pour créer une copie de la classe avec ses résultats.</p>
+    <p>Importe un fichier JSON de Biathlon EPS pour créer une copie de la classe avec ses résultats, ses séances et ses équipes.</p>
     <form id="backup-form"><div class="grid"><label>Sauvegarde JSON<input type="file" name="file" accept=".json,application/json" required></label></div>
       <button class="primary">Réimporter la classe</button></form></section>
   ${classPicker()}
@@ -114,7 +117,7 @@ function entry(student) {
   const draft = resultDrafts.get(student.id);
   const fieldTime = (name, value) => e(draft ? draft[name] : inputTime(value));
   return `<section class="panel">${studentNavigation(student)}
-  <h2>Saisir l’épreuve</h2><p class="muted">En secondes (ex. 32,5) ou en minutes.secondes (ex. 4.48).</p>
+  <h2>Saisir l’évaluation</h2><p class="muted">En secondes (ex. 32,5) ou en minutes.secondes (ex. 4.48).</p>
   <form id="result-form"><div class="grid"><label>Temps total, tir compris<input name="total" inputmode="decimal" required value="${fieldTime('total', result?.total)}" placeholder="Ex. 4.48"></label></div>
   <div class="shots">${Array.from({length:4}, (_, index) => {
     const shot = result?.shots[index];
@@ -247,6 +250,7 @@ function render() {
   }
   const student = currentStudent();
   if (view === 'classes') screen.innerHTML = classes();
+  else if (view === 'sessions') screen.innerHTML = classPicker() + training.html(currentClass());
   else if (view === 'class-report') screen.innerHTML = classReport();
   else if (!student) screen.innerHTML = classPicker() + '<section class="panel"><h2>Aucun élève dans cette classe</h2><button data-go="classes">Gérer les classes</button></section>';
   else screen.innerHTML = classPicker() + (view === 'entry' ? entry(student) : report(student));
@@ -272,6 +276,7 @@ function downloadFile(content, filename, mimeType) {
 document.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button) return;
+  if (button.dataset.training) return training.click(button);
   if (button.dataset.export) {
     const group = currentClass();
     if (!group) return;
@@ -309,9 +314,10 @@ document.addEventListener('click', event => {
   }
   if (deleteId) {
     const student = currentClass()?.students.find(item => item.id === deleteId);
-    if (!student || !window.confirm(`Supprimer ${fullName(student)} de la classe ? Son résultat sera aussi supprimé.`)) return;
+    if (!student || !window.confirm(`Supprimer ${fullName(student)} de la classe ? Ses résultats et ceux des binômes auxquels il a participé seront aussi supprimés.`)) return;
     if (!mutateClass(classId, group => {
       group.students = group.students.filter(item => item.id !== deleteId);
+      removeTrainingStudent(group, deleteId);
     }, 'Élève supprimé.')) return;
     resultDrafts.delete(deleteId);
     if (editingId === deleteId) editingId = undefined;
@@ -336,6 +342,7 @@ screen.addEventListener('keydown', event => {
 
 screen.addEventListener('change', event => {
   const input = event.target;
+  if ('trainingSelect' in input.dataset || input.dataset.trainingMember) return training.change(input);
   const investmentId = input.dataset.investment;
   if (investmentId) {
     const student = currentClass().students.find(item => item.id === investmentId);
@@ -389,6 +396,7 @@ screen.addEventListener('change', event => {
     return;
   }
   if (event.target.id === 'class-select') {
+    training.reset();
     classId = event.target.value;
     editingId = undefined;
   } else if (event.target.id === 'student-select') studentId = event.target.value;
@@ -423,6 +431,7 @@ screen.addEventListener('submit', async event => {
   const form = new FormData(target);
   const groupId = classId;
   try {
+    if (['training-event', 'training-team', 'training-result'].includes(target.id)) return training.submit(target.id, form);
     if (target.id === 'backup-form') {
       const file = form.get('file');
       const button = target.querySelector('button');
