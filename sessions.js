@@ -83,12 +83,24 @@ function eliminationOrder(event) {
 }
 
 export function eliminationRanking(event) {
-  const {rounds, finished} = event.elimination;
-  const final = finished ? eliminationOrder(event).map(row => ({members:row.members, stage:'Finale'})) : [];
-  const eliminated = rounds.flatMap((ids, index) => [ids.map(id => ({members:[id], stage:'Tour ' + (index + 1)}))]);
-  const ordered = [...final, ...eliminated.reverse().flat()];
-  const offset = finished ? 0 : event.elimination.active.length;
-  return ordered.map((row, index) => ({...row, place:offset + index + 1, points:Math.max(0, event.classSize - offset - index)}));
+  const {active, rounds, finished, manualRounds = [], finalOrder} = event.elimination;
+  const rows = [];
+  let place = finished ? 1 : active.length + 1;
+  function add(ids, stage, tied) {
+    for (const [index, id] of ids.entries()) {
+      const rank = place + (tied ? 0 : index);
+      rows.push({members:[id], stage, place:rank, points:Math.max(0, event.classSize - rank + 1)});
+    }
+    place += ids.length;
+  }
+  if (finished) {
+    const ids = finalOrder === null ? active : finalOrder ?? eliminationOrder(event).map(row => row.members[0]);
+    add(ids, 'Finale', finalOrder === null);
+  }
+  for (let i = rounds.length - 1; i >= 0; i--) {
+    add(rounds[i], 'Tour ' + (i + 1), manualRounds.includes(i));
+  }
+  return rows;
 }
 
 export function cycleScores(group) {
@@ -177,15 +189,20 @@ export function restoreTraining(source, group, newId) {
     });
     let elimination;
     if (event.elimination != null) {
-      const {active, rounds, finished} = event.elimination;
+      const {active, rounds, finished, manualRounds = [], finalOrder} = event.elimination;
       if (event.loops !== 1 || event.passes !== 1 || event.size !== 1 || event.scoring !== 'net'
         || !Array.isArray(active) || !Array.isArray(rounds) || !rounds.every(Array.isArray) || typeof finished !== 'boolean') invalid();
       const ids = [...active, ...rounds.flat()];
       if (new Set(ids).size !== ids.length || ids.some(id => !idMap.has(id))
         || event.results.some(row => !active.includes(row.members[0]))
-        || (finished && results.length !== active.length)) invalid();
+        || !Array.isArray(manualRounds) || manualRounds.some(index => !integer(index, 0, rounds.length - 1))
+        || (finalOrder !== undefined && (!finished || (finalOrder !== null &&
+          (!Array.isArray(finalOrder) || finalOrder.length !== active.length ||
+            new Set(finalOrder).size !== active.length || finalOrder.some(id => !active.includes(id))))))
+        || (finished && finalOrder === undefined && results.length !== active.length)) invalid();
       elimination = {active:active.map(id => idMap.get(id)),
-        rounds:rounds.map(ids => ids.map(id => idMap.get(id))), finished};
+        rounds:rounds.map(ids => ids.map(id => idMap.get(id))), finished, manualRounds,
+        ...(finalOrder !== undefined ? {finalOrder:finalOrder?.map(id => idMap.get(id)) ?? null} : {})};
     }
     const {lesson, name, loops, passes, targets, size, scoring, classSize} = event;
     return {id:newId(), lesson, name, loops, passes, targets, size, scoring, classSize, shotMode:shotMode(event), shotAmount:event.shotAmount ?? 0, results, ...(elimination ? {elimination} : {})};
@@ -198,6 +215,7 @@ export function removeTrainingStudent(group, studentId) {
     event.results = event.results.filter(result => !result.members.includes(studentId));
     if (event.elimination) {
       event.elimination.active = event.elimination.active.filter(id => id !== studentId);
+      if (event.elimination.finalOrder) event.elimination.finalOrder = event.elimination.finalOrder.filter(id => id !== studentId);
       event.elimination.rounds = event.elimination.rounds.map(ids => ids.filter(id => id !== studentId));
     }
   }
@@ -361,20 +379,23 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
 
   function eliminationPanel(group, event) {
     const {active, rounds, finished} = event.elimination;
-    const ready = active.length > 0 && active.length === event.results.length;
     const pupils = new Map(group.students.map(student => [student.id, fullName(student)]));
     const rows = eliminationRanking(event).map(row =>
-      `<tr><td>${row.place}</td><th scope="row">${e(pupils.get(row.members[0]))}</th><td>${row.stage}</td>
-      ${finished ? `<td>${row.points}</td>` : ''}</tr>`);
+      `<tr><td>${row.place}</td><th scope="row">${e(pupils.get(row.members[0]))}</th><td>${row.stage}</td><td>${row.points}</td></tr>`);
+    const entries = active.map(id => `<tr><th scope="row">${e(pupils.get(id))}</th>
+      <td><input name="rank-${e(id)}" type="number" min="1" max="${active.length}" step="1" aria-label="Rang de ${e(pupils.get(id))}"></td>
+      ${active.length > 1 ? `<td><input name="eliminated" type="checkbox" value="${e(id)}" aria-label="Éliminer ${e(pupils.get(id))}"></td>` : ''}</tr>`);
     return `<h3>${finished ? 'Épreuve terminée' : 'Tour ' + (rounds.length + 1)}</h3>
-      ${finished ? '' : `<p>${event.results.length} / ${active.length} résultats enregistrés.</p>
-        ${entryTable(group,event)}
-        <p class="muted">En cas d’égalité exacte à la coupure, l’ordre de la liste de classe départage les élèves.</p>
-        ${active.length > 1 ? `<form id="training-eliminate"><div class="grid"><label>Nombre de derniers à éliminer<input name="count" type="number" min="1" max="${active.length - 1}" value="1" required></label></div>
-          <button class="primary" ${ready ? '' : 'disabled'}>Éliminer et passer au tour suivant</button></form>` : ''}
-        <form id="training-final"><button ${ready ? '' : 'disabled'}>Valider ce tour comme finale</button></form>`}
+      ${finished ? '' : `<form id="training-round">
+        <p>Saisis tous les rangs, ou laisse les rangs vides et coche les élèves éliminés. Les élèves éliminés ensemble sans rang sont ex æquo.</p>
+        ${table('Participants au tour', ['Élève','Rang (facultatif)', ...(active.length > 1 ? ['Éliminer manuellement'] : [])], entries)}
+        ${active.length > 1 ? `<div class="grid"><label>Nombre de derniers à éliminer si les rangs sont saisis<input name="count" type="number" min="1" max="${active.length - 1}" value="1"></label></div>` : ''}
+        <div class="actions">
+          ${active.length > 1 ? '<button class="primary" type="submit" value="eliminate">Éliminer et passer au tour suivant</button>' : ''}
+          <button type="submit" value="final">Valider la finale</button>
+        </div></form>`}
       <h3>${finished ? 'Classement final' : 'Élèves éliminés'}</h3>
-      ${rows.length ? table('Classement de l’élimination', ['Rang','Élève','Tour atteint', ...(finished ? ['Points'] : [])], rows) : '<p>Aucun élève éliminé.</p>'}`;
+      ${rows.length ? table('Classement de l’élimination', ['Rang','Élève','Tour atteint', 'Points'], rows) : '<p>Aucun élève éliminé.</p>'}`;
   }
 
   function eventPanel(group) {
@@ -398,7 +419,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
         <p class="training-format">${event.elimination ? 'Élimination' : event.size === 2 ? 'Binôme' : 'Individuel'} · ${event.loops} × 200 m · ${event.passes} passage(s) au tir · ${event.targets} cibles/passage</p>
         ${shotMode(event) === 'rings' ? '<p class="muted">Inclus les anneaux courus dans le temps total saisi.</p>' : ''}
         ${event.elimination ? eliminationPanel(group, event) : entryTable(group, event)}</section>
-        ${event.elimination?.finished ? '' : `<details class="training-details"><summary>Détail des classements et des tirs</summary>${standings(group, event)}</details>`}` : ''}`;
+        ${event.elimination ? '' : `<details class="training-details"><summary>Détail des classements et des tirs</summary>${standings(group, event)}</details>`}` : ''}`;
   }
 
   function cyclePanel(group) {
@@ -505,21 +526,36 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     if (id === 'training-eliminate' || id === 'training-final') {
       const event = selectEvent(group);
       const state = event?.elimination;
-      if (!state || state.finished || !state.active.length || event.results.length !== state.active.length) {
-        throw new Error('Enregistre tous les résultats du tour avant de le valider.');
-      }
+      if (!state || state.finished || !state.active.length) throw new Error('Ce tour ne peut pas être validé.');
       const final = id === 'training-final';
-      const count = Number(form.get('count'));
-      if (!final && !integer(count, 1, state.active.length - 1)) {
-        throw new Error('Choisis combien de derniers éliminer. Il doit rester au moins un élève.');
+      const ranks = state.active.map(pupil => String(form.get('rank-' + pupil) ?? '').trim());
+      const ranked = ranks.some(Boolean);
+      const numericRanks = ranks.map(Number);
+      if (ranked && (!numericRanks.every(rank => integer(rank, 1, state.active.length))
+          || new Set(numericRanks).size !== state.active.length)) {
+        throw new Error('Saisis un rang différent pour chaque élève, ou laisse tous les rangs vides.');
       }
-      const eliminated = final ? [] : eliminationOrder(event).slice(-count).map(row => row.members[0]);
+      const manual = [...new Set(form.getAll('eliminated'))];
+      if (manual.some(pupil => !state.active.includes(pupil)) || (manual.length && (ranked || final))) {
+        throw new Error('Pour éliminer manuellement, laisse les rangs vides. Décoche les élèves pour valider la finale.');
+      }
+      const order = ranked ? state.active.map((pupil, i) => ({pupil, rank:numericRanks[i]}))
+        .sort((a, b) => a.rank - b.rank).map(row => row.pupil) : null;
+      const count = ranked ? Number(form.get('count')) : manual.length;
+      if (!final && !integer(count, 1, state.active.length - 1)) {
+        throw new Error('Indique qui éliminer. Il doit rester au moins un élève.');
+      }
+      const eliminated = final ? [] : order ? order.slice(-count) : manual;
       const message = final ? 'Finale validée. Les points sont ajoutés au cumul.' : count + ' élève(s) éliminé(s). Tour suivant ouvert.';
       if (!mutateClass(group.id, next => {
         const saved = next.events.find(item => item.id === event.id);
         if (final) {
           saved.elimination.finished = true;
+          saved.elimination.finalOrder = order;
+          saved.results = [];
         } else {
+          saved.elimination.manualRounds ??= [];
+          if (!ranked) saved.elimination.manualRounds.push(saved.elimination.rounds.length);
           saved.elimination.rounds.push(eliminated);
           saved.elimination.active = saved.elimination.active.filter(id => !eliminated.includes(id));
           saved.results = [];

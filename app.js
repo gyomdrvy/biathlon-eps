@@ -437,7 +437,8 @@ screen.addEventListener('submit', async event => {
   const groupId = classId;
   try {
     if (target.hasAttribute('data-training-result')) return training.submit('training-result', form);
-    if (['training-event', 'training-team', 'training-eliminate', 'training-final'].includes(target.id)) return training.submit(target.id, form);
+    if (target.id === 'training-round') return training.submit(event.submitter?.value === 'final' ? 'training-final' : 'training-eliminate', form);
+    if (['training-event', 'training-team'].includes(target.id)) return training.submit(target.id, form);
     if (target.id === 'backup-form') {
       const restoreView = view === 'sessions' ? 'sessions' : 'class-report';
       const file = form.get('file');
