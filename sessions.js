@@ -38,7 +38,7 @@ export function rankings(event, classSize) {
   }
   return {
     net: rank(net, row => event.loops ? [durationKey(row.total)] : [-row.hits, durationKey(row.total)]),
-    project: event.loops ? rank(net.filter(row => row.gap !== null), row => [durationKey(Math.abs(row.gap))]) : []
+    project: event.loops ? rank(net.filter(row => row.gap !== null), row => [durationKey(row.gap)]) : []
   };
 }
 
