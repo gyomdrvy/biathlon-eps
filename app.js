@@ -1,7 +1,7 @@
 import {analyse, grade, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
-import {backupClass, readClassBackup, gradebookCsv} from './transfers.js';
-import {createTraining, removeTrainingStudent} from './sessions.js';
+import {backupClass, readClassBackup, gradebookCsv} from './transfers.js?v=28';
+import {createTraining, removeTrainingStudent} from './sessions.js?v=28';
 
 const KEY = 'biathlon-eps-classes-v1';
 const screen = document.querySelector('#screen');
@@ -533,4 +533,4 @@ screen.addEventListener('submit', async event => {
 });
 
 render();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).catch(() => {});
