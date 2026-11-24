@@ -80,8 +80,16 @@ export function cycleScores(group) {
   const teams = (group.teams ?? []).map(team => {
     const members = students.filter(row => row.student.teamId === team.id);
     const total = sum(members.map(row => row.total));
-    return {team, members, total, average: members.length ? total / members.length : null};
-  }).sort((a, b) => (b.average ?? -1) - (a.average ?? -1));
+    return {team, members, total};
+  });
+  const sizes = teams.map(row => row.members.length).filter(size => size > 0);
+  const countedSize = sizes.length ? Math.min(...sizes) : 0;
+  for (const row of teams) {
+    const best = row.members.map(member => member.total).sort((a, b) => b - a).slice(0, countedSize);
+    row.counted = best.length;
+    row.teamScore = best.length ? sum(best) : null;
+  }
+  teams.sort((a, b) => (b.teamScore ?? -1) - (a.teamScore ?? -1));
   return {lessons, students: students.sort((a, b) => b.total - a.total), teams};
 }
 
@@ -233,14 +241,13 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       return `<tr><td>${place}</td><th scope="row">${e(fullName(row.student))}</th>${row.scores.map(score => `<td>${score}</td>`).join('')}<td><strong>${row.total}</strong></td></tr>`;
     });
     let teamPlace = 0;
-    const averageFormat = new Intl.NumberFormat('fr-FR', {maximumFractionDigits:2});
     return `<section class="panel"><h2>Points individuels par séance</h2>
       ${table('Points individuels par séance', headers, rows)}
       <p class="muted">Le premier reçoit autant de points que l’effectif inscrit à la création de l’épreuve, puis un point de moins par place. Ex æquo au même rang et aux mêmes points. Chaque partenaire reçoit les points de son binôme. Un résultat absent vaut 0.</p>
       <h2>Classement des équipes</h2>
-      ${teams.length ? table('Classement des équipes', ['Rang', 'Équipe', 'Membres', 'Effectif', 'Total brut', 'Points par élève'], teams.map((row, index) => {
-        if (!index || teams[index - 1].average !== row.average) teamPlace = index + 1;
-        return `<tr><td>${row.average == null ? '—' : teamPlace}</td><th scope="row">${e(row.team.name)}</th><td>${e(row.members.map(item => fullName(item.student)).join(', ')) || '—'}</td><td>${row.members.length}</td><td>${row.total}</td><td><strong>${row.average == null ? '—' : averageFormat.format(row.average)}</strong></td></tr>`;
+      ${teams.length ? table('Classement des équipes', ['Rang', 'Équipe', 'Membres', 'Élèves comptés', 'Total brut', 'Points retenus'], teams.map((row, index) => {
+        if (!index || teams[index - 1].teamScore !== row.teamScore) teamPlace = index + 1;
+        return `<tr><td>${row.teamScore == null ? '—' : teamPlace}</td><th scope="row">${e(row.team.name)}</th><td>${e(row.members.map(item => fullName(item.student)).join(', ')) || '—'}</td><td>${row.counted} / ${row.members.length}</td><td>${row.total}</td><td><strong>${row.teamScore == null ? '—' : row.teamScore}</strong></td></tr>`;
       })) : '<p>Crée des équipes dans l’onglet Équipes.</p>'}
     </section>`;
   }
@@ -248,7 +255,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
   function teamsPanel(group) {
     return `<section class="panel"><h2>Équipes</h2><form id="training-team"><div class="grid">
       <label>Nom de l’équipe<input required name="team" maxlength="70"></label></div><button class="primary">Créer l’équipe</button></form>
-      ${group.teams?.length ? `<p class="training-format">Choisis une équipe pour chaque élève. Le classement additionne les points des membres actuels, puis les divise par l’effectif de l’équipe.</p>
+      ${group.teams?.length ? `<p class="training-format">Choisis une équipe pour chaque élève. Le classement additionne les meilleurs totaux individuels. Chaque équipe compte autant d’élèves que la plus petite équipe non vide.</p>
       ${group.teams.length >= 2 && group.students.length >= group.teams.length
         ? '<button data-training="draw-teams" class="primary">Tirer les équipes au sort</button><small>Les choix Fille/Garçon dans Classes servent à équilibrer le tirage.</small>'
         : '<small>Il faut au moins deux équipes et assez d’élèves pour toutes les remplir.</small>'}
