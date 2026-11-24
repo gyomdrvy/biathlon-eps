@@ -1,5 +1,6 @@
 import {analyse, grade, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
+import {backupClass, readClassBackup, gradebookCsv} from './transfers.js';
 
 const KEY = 'biathlon-eps-classes-v1';
 const screen = document.querySelector('#screen');
@@ -63,6 +64,10 @@ function classes() {
   return `<section class="panel"><h2>Créer une classe</h2>
     <form id="new-class"><div class="grid"><label>Nom de la classe<input name="name" required maxlength="70" placeholder="Ex. 3e A"></label></div>
     <button class="primary">Créer la classe</button></form></section>
+  <section class="panel"><h2>Restaurer une sauvegarde</h2>
+    <p>Importe un fichier JSON de Biathlon EPS pour créer une copie de la classe avec ses résultats.</p>
+    <form id="backup-form"><div class="grid"><label>Sauvegarde JSON<input type="file" name="file" accept=".json,application/json" required></label></div>
+      <button class="primary">Réimporter la classe</button></form></section>
   ${classPicker()}
   ${group ? `<section class="panel"><h2>${edited ? 'Modifier un élève' : 'Ajouter un élève'}</h2>
     <form id="student-form"><div class="grid3">
@@ -217,6 +222,10 @@ function classReport() {
       <td class="final-mark" data-final-mark>${points(mark?.total ?? null, 20)}</td></tr>`;
   }).join('');
   return classPicker() + `<section class="panel"><h2 id="class-report-title">Bilan de classe · ${e(group.name)}</h2>
+    <div class="actions class-export-actions">
+      <button type="button" data-export="backup">Sauvegarder la classe (JSON)</button>
+      <button type="button" data-export="idoceo">Exporter vers iDoceo (CSV)</button>
+    </div>
     <h3 class="class-averages-title">Moyennes de la classe</h3>
     <div class="class-averages" id="class-averages" aria-live="polite">${classAverages(group.students, grades)}</div>
     <div class="class-report-scroll" role="region" aria-labelledby="class-report-title" tabindex="0">
@@ -249,9 +258,32 @@ function go(target) {
   render();
 }
 
+function downloadFile(content, filename, mimeType) {
+  const url = URL.createObjectURL(new Blob([content], {type:mimeType}));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 document.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button) return;
+  if (button.dataset.export) {
+    const group = currentClass();
+    if (!group) return;
+    const filename = group.name.replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-+|-+$/g, '') || 'classe';
+    if (button.dataset.export === 'backup') {
+      downloadFile(backupClass(group), `Biathlon-${filename}.json`, 'application/json');
+    } else {
+      downloadFile(gradebookCsv(group.students, group.students.map(studentGrade)),
+        `Biathlon-${filename}-iDoceo.csv`, 'text/csv;charset=utf-8');
+    }
+    return;
+  }
   if (button.dataset.hits !== undefined) {
     const picker = button.closest('.target-picker');
     const input = picker.querySelector('input');
@@ -391,7 +423,29 @@ screen.addEventListener('submit', async event => {
   const form = new FormData(target);
   const groupId = classId;
   try {
-    if (target.id === 'new-class') {
+    if (target.id === 'backup-form') {
+      const file = form.get('file');
+      const button = target.querySelector('button');
+      button.disabled = true;
+      let group;
+      try {
+        group = readClassBackup(await file.text(), newId);
+      } catch (error) {
+        if (error instanceof SyntaxError) throw new Error('Le fichier JSON est illisible.');
+        throw error;
+      } finally {
+        button.disabled = false;
+      }
+      const base = group.name;
+      for (let copy = 2; data.some(item => item.name.toLowerCase() === group.name.toLowerCase()); copy++) {
+        group.name = `${base} (${copy})`;
+      }
+      if (!update(groups => groups.push(group), 'Classe restaurée avec ses résultats.')) return;
+      classId = group.id;
+      studentId = undefined;
+      editingId = undefined;
+      view = 'class-report';
+    } else if (target.id === 'new-class') {
       const name = form.get('name').trim();
       if (!name) throw new Error('Saisis un nom de classe.');
       if (data.some(group => group.name.toLowerCase() === name.toLowerCase())) throw new Error('Cette classe existe déjà.');

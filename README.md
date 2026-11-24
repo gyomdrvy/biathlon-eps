@@ -40,3 +40,9 @@ Réussite au tir · 4 points dès 80 %, puis un demi-point de moins par tranche 
 Temps total au tir · 2 points en moins de 2.00, 1,5 en moins de 2.40, 1 en moins de 3.20, 0,5 en moins de 4.00, puis 0.
 
 En haut du **Bilan de classe**, les moyennes des cinq critères et de la note finale comptent les notes disponibles, y compris les zéros. Chaque carte indique l’effectif pris en compte.
+
+## Sauvegarde et export iDoceo
+
+Dans **Bilan de classe**, **Sauvegarder la classe (JSON)** enregistre la liste des élèves, les références, les résultats enregistrés de l’épreuve et l’investissement. Dans **Classes**, **Réimporter la classe** ouvre cette sauvegarde dans une nouvelle classe. Les copies d’une classe existante reçoivent un numéro.
+
+**Exporter vers iDoceo (CSV)** télécharge un fichier contenant le nom, le prénom, les cinq critères et la note finale sur 20. Les notes non renseignées restent vides. Dans l’assistant d’importation iDoceo, associe les colonnes Nom et Prénom et sélectionne les colonnes de notes à importer.
