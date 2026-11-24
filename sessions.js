@@ -158,23 +158,86 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
   let tab = 'events';
   let selectedEvent;
   let selectedResult;
+  let selectedPupil;
   const selectEvent = group => (group.events ?? []).find(event => event.id === selectedEvent) ?? group.events?.[0];
   const table = (label, headers, rows) => `<div class="class-report-scroll" role="region" aria-label="${e(label)}" tabindex="0">
     <table class="class-report-table"><thead><tr>${headers.map(header => `<th scope="col">${e(header)}</th>`).join('')}</tr></thead>
     <tbody>${rows.join('')}</tbody></table></div>`;
   const signed = value => value == null ? '—' : (value < 0 ? '−' : value > 0 ? '+' : '') + formatTime(value);
 
+  function selectedStudent(group, event) {
+    return group.students.find(student => student.id === selectedPupil)
+      ?? group.students.find(student => !event.results.some(result => result.members[0] === student.id))
+      ?? group.students[0];
+  }
+
+  function roster(group, event) {
+    const pupils = new Map(group.students.map(student => [student.id, fullName(student)]));
+    if (event.size === 1) {
+      const active = selectedStudent(group, event);
+      const results = new Map(event.results.map(result => [result.members[0], result]));
+      return group.students.map(student => {
+        const result = results.get(student.id);
+        return `<button data-training="select-pupil" data-pupil-id="${e(student.id)}" aria-pressed="${student === active}">
+          <strong>${e(fullName(student))}</strong><small>${result ? formatTime(result.total) : 'À saisir'}</small></button>`;
+      }).join('');
+    }
+    const canAdd = group.students.length - event.results.length * 2 >= 2;
+    return (canAdd ? `<button data-training="new-pair" aria-pressed="${!selectedResult}">Nouveau binôme</button>` : '')
+      + event.results.map(result => `<button data-training="select-pair" data-result-id="${e(result.id)}" aria-pressed="${result.id === selectedResult}">
+        <strong>${e(result.members.map(id => pupils.get(id)).join(' + '))}</strong><small>${formatTime(result.total)}</small></button>`).join('');
+  }
+
+  function activeResult(group, event) {
+    return event.size === 1
+      ? event.results.find(result => result.members[0] === selectedStudent(group, event)?.id)
+      : event.results.find(result => result.id === selectedResult);
+  }
+
+  function fieldValue(form, name) {
+    return form.elements.namedItem(name)?.value;
+  }
+
+  function preview(form) {
+    const group = currentClass();
+    const event = selectEvent(group);
+    const totalDisplay = form.querySelector('[data-training-total]');
+    const gapDisplay = form.querySelector('[data-training-gap]');
+    if (totalDisplay) {
+      const times = Array.from({length:event.passes}, (_, i) => parseTime(fieldValue(form, 'time' + i)));
+      totalDisplay.textContent = times.every(positive) ? formatTime(sum(times)) : '—';
+    }
+    if (gapDisplay) {
+      const saved = activeResult(group, event);
+      const ids = Array.from({length:event.size}, (_, i) => fieldValue(form, 'member' + i));
+      const pupils = ids.map(id => group.students.find(student => student.id === id));
+      const valid = pupils.every(Boolean) && new Set(ids).size === event.size;
+      const sameMembers = saved?.members.every((id, i) => id === ids[i]);
+      const target = valid ? (sameMembers ? saved.target ?? projectTime(event, pupils) : projectTime(event, pupils)) : null;
+      const total = parseTime(fieldValue(form, 'total'));
+      gapDisplay.textContent = target != null && positive(total) ? signed(total - target) : '—';
+      form.querySelector('[data-training-target]').textContent = target == null ? '—' : formatTime(target);
+    }
+  }
+
   function resultForm(group, event) {
-    const saved = event.results.find(result => result.id === selectedResult);
+    const saved = activeResult(group, event);
+    const pupil = event.size === 1 ? selectedStudent(group, event) : null;
+    if (event.size === 1 && !pupil) return '<p>Ajoute des élèves dans Classes.</p>';
     const taken = new Set(event.results.filter(result => result !== saved).flatMap(result => result.members));
     const available = group.students.filter(student => !taken.has(student.id));
-    if (available.length < event.size) return '<p>Tous les résultats possibles sont saisis. Utilise « Modifier » dans le classement pour corriger une ligne.</p>';
+    if (available.length < event.size) return '<p>Tous les résultats possibles sont saisis. Sélectionne un binôme à gauche pour consulter ou modifier son résultat.</p>';
     const member = index => `<label>${event.size === 1 ? 'Élève' : index === 0 ? 'Élève qui commence' : 'Partenaire'}
       <select name="member${index}" required><option value="">Choisir</option>${available.map(student =>
         labelOption(student.id, fullName(student), saved?.members[index] === student.id)).join('')}</select></label>`;
-    return `<form id="training-result"><h3>${saved ? 'Modifier le résultat' : 'Saisir un résultat'}</h3>
-      <div class="grid3">${Array.from({length:event.size}, (_, index) => member(index)).join('')}
-      ${event.loops ? `<label>Temps total (course et tir)<input name="total" inputmode="decimal" required placeholder="Ex. 4.48" value="${inputTime(saved?.total)}"></label>` : ''}</div>
+    return `<form id="training-result"><h3>${pupil ? e(fullName(pupil)) : saved ? 'Modifier le binôme' : 'Nouveau binôme'}</h3>
+      <div class="grid3">${pupil ? `<input type="hidden" name="member0" value="${e(pupil.id)}">` : member(0) + member(1)}
+      ${event.loops ? `<label>Temps total (course et tir)<input name="total" inputmode="decimal" required placeholder="Ex. 4.48" value="${inputTime(saved?.total)}"></label>` : `<div><small>Temps total au tir</small><strong data-training-total aria-live="polite">${saved ? formatTime(saved.total) : '—'}</strong></div>`}</div>
+      ${event.loops ? (() => {
+        const target = saved?.target ?? (pupil ? projectTime(event, [pupil]) : null);
+        return `<div class="training-project"><span>Temps cible <strong data-training-target>${target == null ? '—' : formatTime(target)}</strong></span>
+          <span>Écart au projet <strong data-training-gap aria-live="polite">${signed(saved && target != null ? saved.total - target : null)}</strong></span></div>`;
+      })() : ''}
       ${event.passes ? `<div class="shots">${Array.from({length:event.passes}, (_, i) => {
         const shot = saved?.shots[i];
         return `<div class="card"><h3>Passage ${i + 1}</h3>
@@ -204,7 +267,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     const project = ranked.project.map(row => `<tr><td>${row.place}</td><th scope="row">${names(row)}</th>
       <td>${formatTime(row.target)}</td><td>${formatTime(row.total)}</td><td>${signed(row.gap)}</td>
       ${event.scoring === 'project' ? `<td>${row.points}</td>` : ''}</tr>`);
-    return `<section class="panel"><h3>Classement net${scored('net')}</h3>
+    return `<section class="panel"><h2>Classement de la classe</h2><h3>Classement net${scored('net')}</h3>
       ${net.length ? table('Classement net', netHeaders, net) : '<p>Aucun résultat enregistré.</p>'}
       ${event.loops ? `<h3>Classement au projet${scored('project')}</h3>${project.length
         ? table('Classement au projet', ['Rang', 'Élève ou binôme', 'Temps cible', 'Temps réalisé', 'Écart', ...(event.scoring === 'project' ? ['Points'] : [])], project)
@@ -215,7 +278,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
 
   function eventPanel(group) {
     const event = selectEvent(group);
-    return `<section class="panel"><h2>Créer une épreuve de séance</h2>
+    return `<details class="panel training-create" ${event ? '' : 'open'}><summary>Créer une épreuve de séance</summary>
       <form id="training-event"><div class="grid3">
         <label>Séance<input name="lesson" required maxlength="70" placeholder="Ex. Séance 1"></label>
         <label>Nom de l’épreuve<input name="eventName" required maxlength="70" placeholder="Ex. Relais précision"></label>
@@ -225,11 +288,12 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
         <label>Cibles par passage<input type="number" name="targets" min="1" max="100" required value="5"></label>
         <label>Classement qui attribue les points<select name="scoring"><option value="net">Net</option><option value="project">Au projet</option></select></label>
       </div><p class="muted">Pour une épreuve de tir seul, saisis 0 boucle. Pour une épreuve de course seule, saisis 0 passage au tir.</p>
-      <button class="primary">Créer l’épreuve</button></form></section>
+      <button class="primary">Créer l’épreuve</button></form></details>
       ${event ? `<section class="panel" id="training-entry"><label>Épreuve de séance<select data-training-select>
         ${group.events.map(item => labelOption(item.id, item.lesson + ' · ' + item.name, item.id === event.id)).join('')}</select></label>
         <p class="training-format">${event.size === 2 ? 'Binôme' : 'Individuel'} · ${event.loops} × 200 m · ${event.passes} passage(s) au tir · ${event.targets} cibles/passage</p>
-        ${resultForm(group, event)}</section>${standings(group, event)}` : ''}`;
+        <div class="training-workspace"><aside class="training-roster"><h3>${event.size === 1 ? 'Élèves' : 'Binômes'}</h3>${roster(group, event)}</aside>
+        <div class="training-editor">${resultForm(group, event)}</div></div></section>${standings(group, event)}` : ''}`;
   }
 
   function cyclePanel(group) {
@@ -281,15 +345,21 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       if (!mutateClass(group.id, next => {
         for (const student of next.students) student.teamId = assignments.get(student.id);
       }, 'Équipes tirées au sort.')) return;
-    } else if (action === 'edit-result') {
+    } else if (action === 'select-pupil') {
+      selectedPupil = button.dataset.pupilId;
+    } else if (action === 'new-pair') {
+      selectedResult = undefined;
+    } else if (action === 'edit-result' || action === 'select-pair') {
       selectedResult = button.dataset.resultId;
+      if (event.size === 1) selectedPupil = event.results.find(result => result.id === selectedResult)?.members[0];
     } else if (action === 'cancel-result') {
       selectedResult = undefined;
     } else if (action === 'delete-result') {
       if (!window.confirm('Supprimer ce résultat de séance ?')) return;
+      const resultId = activeResult(group, event)?.id;
       if (!mutateClass(group.id, next => {
         const savedEvent = next.events.find(item => item.id === event.id);
-        savedEvent.results = savedEvent.results.filter(result => result.id !== selectedResult);
+        savedEvent.results = savedEvent.results.filter(result => result.id !== resultId);
       }, 'Résultat supprimé.')) return;
       selectedResult = undefined;
     } else {
@@ -304,6 +374,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     if ('trainingSelect' in input.dataset) {
       selectedEvent = input.value;
       selectedResult = undefined;
+      selectedPupil = undefined;
       render();
     } else {
       const student = group.students.find(item => item.id === input.dataset.trainingMember);
@@ -331,6 +402,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       }, 'Épreuve de séance créée.')) return;
       selectedEvent = event.id;
       selectedResult = undefined;
+      selectedPupil = undefined;
     } else if (id === 'training-team') {
       const name = form.get('team').trim();
       if (!validName(name) || group.teams?.some(team => team.name.toLowerCase() === name.toLowerCase())) {
@@ -343,12 +415,13 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       }, 'Équipe créée.')) return;
     } else {
       const event = selectEvent(group);
+      const previous = activeResult(group, event);
       const members = Array.from({length:event.size}, (_, i) => form.get('member' + i));
       const pupils = members.map(id => group.students.find(student => student.id === id));
       if (pupils.some(student => !student) || new Set(members).size !== event.size) {
         throw new Error('Choisis des élèves différents pour le binôme.');
       }
-      if (event.results.some(result => result.id !== selectedResult && result.members.some(id => members.includes(id)))) {
+      if (event.results.some(result => result.id !== previous?.id && result.members.some(id => members.includes(id)))) {
         throw new Error('Un élève a déjà un résultat dans cette épreuve.');
       }
       const shots = Array.from({length:event.passes}, (_, i) => {
@@ -361,20 +434,20 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       const shooting = sum(shots.map(shot => shot.time));
       const total = event.loops ? parseTime(form.get('total')) : shooting;
       if (!positive(total) || (event.loops && total <= shooting)) throw new Error('Saisis un temps total supérieur au temps passé au tir.');
-      const previous = event.results.find(result => result.id === selectedResult);
       const sameMembers = previous?.members.every((id, i) => id === members[i]);
       const target = sameMembers && previous.target !== null ? previous.target : projectTime(event, pupils);
-      const result = {id:selectedResult ?? newId(), members, total, target, shots};
+      const result = {id:previous?.id ?? newId(), members, total, target, shots};
       if (!mutateClass(group.id, next => {
         const saved = next.events.find(item => item.id === event.id);
         const index = saved.results.findIndex(item => item.id === result.id);
         if (index < 0) saved.results.push(result);
         else saved.results[index] = result;
       }, 'Résultat de séance enregistré.')) return;
-      selectedResult = undefined;
+      if (event.size === 2) selectedResult = result.id;
+      else selectedPupil = members[0];
     }
     render();
   }
 
-  return {html, click, change, submit, reset() { selectedEvent = undefined; selectedResult = undefined; }};
+  return {html, click, change, preview, submit, reset() { selectedEvent = undefined; selectedResult = undefined; selectedPupil = undefined; }};
 }

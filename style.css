@@ -106,3 +106,14 @@ nav{grid-template-columns:repeat(5,minmax(0,1fr))}
 .training-format{margin:12px 0}
 #training-event .muted{margin:0 0 12px}
 #training-entry{scroll-margin:12px}
+
+.training-create{margin-bottom:14px}
+.training-workspace{display:grid;grid-template-columns:minmax(155px,220px) minmax(0,1fr);gap:18px}
+.training-roster{display:flex;flex-direction:column;align-self:start;gap:6px;max-height:65vh;overflow:auto;padding:3px}
+.training-roster button{text-align:left;overflow-wrap:anywhere}
+.training-roster button[aria-pressed="true"]{border:2px solid #a84231;background:#fff0eb}
+.training-editor{min-width:0}
+.training-editor .shots{grid-template-columns:repeat(auto-fit,minmax(min(100%,215px),1fr))}
+.training-project{display:flex;flex-wrap:wrap;gap:12px 24px;padding:12px;background:#f8f2ef;border-radius:8px}
+@media(max-width:600px){.training-workspace{grid-template-columns:minmax(100px,0.65fr) minmax(0,1.35fr);gap:8px}.training-editor .grid3{grid-template-columns:1fr}}
+@media(max-width:360px){.training-workspace{grid-template-columns:1fr}.training-roster{max-height:30vh}}

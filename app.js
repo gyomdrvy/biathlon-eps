@@ -331,6 +331,7 @@ document.addEventListener('click', event => {
 
 screen.addEventListener('input', event => {
   const form = event.target.form;
+  if (form?.id === 'training-result') training.preview(form);
   if (form?.id === 'result-form') {
     resultDrafts.set(studentId, Object.fromEntries(new FormData(form)));
   }
