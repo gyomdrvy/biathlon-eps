@@ -61,16 +61,20 @@ function classPicker() {
   </div></section>`;
 }
 
+function backupPanel(group) {
+  return `<section class="panel"><h2>${group ? 'Sauvegarde des séances' : 'Restaurer une sauvegarde'}</h2>
+    ${group ? '<p>Le fichier JSON reprend les résultats enregistrés, les séances et les équipes. Les classements sont recalculés à la réimportation.</p><div class="actions class-export-actions"><button type="button" data-export="backup">Sauvegarder la classe (JSON)</button></div>' : '<p>Importe un fichier JSON de Biathlon EPS pour retrouver une classe avec ses résultats, ses séances et ses équipes.</p>'}
+    <form id="backup-form"><div class="grid"><label>Sauvegarde JSON<input type="file" name="file" accept=".json,application/json" required></label></div>
+      <button class="primary">Réimporter la classe</button></form></section>`;
+}
+
 function classes() {
   const group = currentClass();
   const edited = group?.students.find(item => item.id === editingId);
   return `<section class="panel"><h2>Créer une classe</h2>
     <form id="new-class"><div class="grid"><label>Nom de la classe<input name="name" required maxlength="70" placeholder="Ex. 3e A"></label></div>
     <button class="primary">Créer la classe</button></form></section>
-  <section class="panel"><h2>Restaurer une sauvegarde</h2>
-    <p>Importe un fichier JSON de Biathlon EPS pour créer une copie de la classe avec ses résultats, ses séances et ses équipes.</p>
-    <form id="backup-form"><div class="grid"><label>Sauvegarde JSON<input type="file" name="file" accept=".json,application/json" required></label></div>
-      <button class="primary">Réimporter la classe</button></form></section>
+  ${backupPanel()}
   ${classPicker()}
   ${group ? `<section class="panel"><h2>${edited ? 'Modifier un élève' : 'Ajouter un élève'}</h2>
     <form id="student-form"><div class="grid3">
@@ -250,7 +254,7 @@ function render() {
   }
   const student = currentStudent();
   if (view === 'classes') screen.innerHTML = classes();
-  else if (view === 'sessions') screen.innerHTML = classPicker() + training.html(currentClass());
+  else if (view === 'sessions') screen.innerHTML = classPicker() + backupPanel(currentClass()) + training.html(currentClass());
   else if (view === 'class-report') screen.innerHTML = classReport();
   else if (!student) screen.innerHTML = classPicker() + '<section class="panel"><h2>Aucun élève dans cette classe</h2><button data-go="classes">Gérer les classes</button></section>';
   else screen.innerHTML = classPicker() + (view === 'entry' ? entry(student) : report(student));
@@ -433,6 +437,7 @@ screen.addEventListener('submit', async event => {
   try {
     if (['training-event', 'training-team', 'training-result'].includes(target.id)) return training.submit(target.id, form);
     if (target.id === 'backup-form') {
+      const restoreView = view === 'sessions' ? 'sessions' : 'class-report';
       const file = form.get('file');
       const button = target.querySelector('button');
       button.disabled = true;
@@ -453,7 +458,8 @@ screen.addEventListener('submit', async event => {
       classId = group.id;
       studentId = undefined;
       editingId = undefined;
-      view = 'class-report';
+      training.reset();
+      view = restoreView;
     } else if (target.id === 'new-class') {
       const name = form.get('name').trim();
       if (!name) throw new Error('Saisis un nom de classe.');
