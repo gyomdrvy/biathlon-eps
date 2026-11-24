@@ -76,13 +76,29 @@ export function drawTeams(students, teams, random = Math.random) {
   return new Map(roster.map((student, index) => [student.id, order[index % order.length].id]));
 }
 
+function eliminationOrder(event) {
+  const order = new Map(event.elimination.active.map((id, index) => [id, index]));
+  return rankings(event, event.classSize).net.sort((a, b) =>
+    a.place - b.place || order.get(a.members[0]) - order.get(b.members[0]));
+}
+
+export function eliminationRanking(event) {
+  const {rounds, finished} = event.elimination;
+  const final = finished ? eliminationOrder(event).map(row => ({members:row.members, stage:'Finale'})) : [];
+  const eliminated = rounds.flatMap((ids, index) => [ids.map(id => ({members:[id], stage:'Tour ' + (index + 1)}))]);
+  const ordered = [...final, ...eliminated.reverse().flat()];
+  const offset = finished ? 0 : event.elimination.active.length;
+  return ordered.map((row, index) => ({...row, place:offset + index + 1, points:Math.max(0, event.classSize - offset - index)}));
+}
+
 export function cycleScores(group) {
   const lessons = [...new Set((group.events ?? []).map(event => event.lesson))];
   const students = group.students.map(student => ({student, scores: lessons.map(() => 0), total: 0}));
   const byId = new Map(students.map(row => [row.student.id, row]));
   for (const event of group.events ?? []) {
     const index = lessons.indexOf(event.lesson);
-    for (const row of rankings(event, event.classSize)[event.scoring]) {
+    const rows = event.elimination ? (event.elimination.finished ? eliminationRanking(event) : []) : rankings(event, event.classSize)[event.scoring];
+    for (const row of rows) {
       for (const id of row.members) {
         const profile = byId.get(id);
         if (!profile) continue;
@@ -159,8 +175,20 @@ export function restoreTraining(source, group, newId) {
       return {id: newId(), members, total: result.total, target: result.target ?? null,
         shots: result.shots.map(({time, hits, attempts}) => ({time:time ?? null, hits, attempts:attempts ?? null}))};
     });
+    let elimination;
+    if (event.elimination != null) {
+      const {active, rounds, finished} = event.elimination;
+      if (event.loops !== 1 || event.passes !== 1 || event.size !== 1 || event.scoring !== 'net'
+        || !Array.isArray(active) || !Array.isArray(rounds) || !rounds.every(Array.isArray) || typeof finished !== 'boolean') invalid();
+      const ids = [...active, ...rounds.flat()];
+      if (new Set(ids).size !== ids.length || ids.some(id => !idMap.has(id))
+        || event.results.some(row => !active.includes(row.members[0]))
+        || (finished && results.length !== active.length)) invalid();
+      elimination = {active:active.map(id => idMap.get(id)),
+        rounds:rounds.map(ids => ids.map(id => idMap.get(id))), finished};
+    }
     const {lesson, name, loops, passes, targets, size, scoring, classSize} = event;
-    return {id:newId(), lesson, name, loops, passes, targets, size, scoring, classSize, shotMode:shotMode(event), shotAmount:event.shotAmount ?? 0, results};
+    return {id:newId(), lesson, name, loops, passes, targets, size, scoring, classSize, shotMode:shotMode(event), shotAmount:event.shotAmount ?? 0, results, ...(elimination ? {elimination} : {})};
   });
   return group;
 }
@@ -168,6 +196,10 @@ export function restoreTraining(source, group, newId) {
 export function removeTrainingStudent(group, studentId) {
   for (const event of group.events ?? []) {
     event.results = event.results.filter(result => !result.members.includes(studentId));
+    if (event.elimination) {
+      event.elimination.active = event.elimination.active.filter(id => id !== studentId);
+      event.elimination.rounds = event.elimination.rounds.map(ids => ids.filter(id => id !== studentId));
+    }
   }
 }
 
@@ -285,7 +317,8 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     }
     let rows;
     if (event.size === 1) {
-      rows = group.students.map(pupil => row(pupil.id, resultByPupil.get(pupil.id), pupil));
+      rows = group.students.filter(pupil => !event.elimination || event.elimination.active.includes(pupil.id))
+        .map(pupil => row(pupil.id, resultByPupil.get(pupil.id), pupil));
     } else {
       const count = Math.max(0, Math.floor(group.students.length / 2) - event.results.length);
       const results = new Map(event.results.map(result => [result.id, result]));
@@ -326,27 +359,46 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     </section>`;
   }
 
+  function eliminationPanel(group, event) {
+    const {active, rounds, finished} = event.elimination;
+    const ready = active.length > 0 && active.length === event.results.length;
+    const pupils = new Map(group.students.map(student => [student.id, fullName(student)]));
+    const rows = eliminationRanking(event).map(row =>
+      `<tr><td>${row.place}</td><th scope="row">${e(pupils.get(row.members[0]))}</th><td>${row.stage}</td>
+      ${finished ? `<td>${row.points}</td>` : ''}</tr>`);
+    return `<h3>${finished ? 'Épreuve terminée' : 'Tour ' + (rounds.length + 1)}</h3>
+      ${finished ? '' : `<p>${event.results.length} / ${active.length} résultats enregistrés.</p>
+        ${entryTable(group,event)}
+        <p class="muted">En cas d’égalité exacte à la coupure, l’ordre de la liste de classe départage les élèves.</p>
+        ${active.length > 1 ? `<form id="training-eliminate"><div class="grid"><label>Nombre de derniers à éliminer<input name="count" type="number" min="1" max="${active.length - 1}" value="1" required></label></div>
+          <button class="primary" ${ready ? '' : 'disabled'}>Éliminer et passer au tour suivant</button></form>` : ''}
+        <form id="training-final"><button ${ready ? '' : 'disabled'}>Valider ce tour comme finale</button></form>`}
+      <h3>${finished ? 'Classement final' : 'Élèves éliminés'}</h3>
+      ${rows.length ? table('Classement de l’élimination', ['Rang','Élève','Tour atteint', ...(finished ? ['Points'] : [])], rows) : '<p>Aucun élève éliminé.</p>'}`;
+  }
+
   function eventPanel(group) {
     const event = selectEvent(group);
     return `<details class="panel training-create" ${event ? '' : 'open'}><summary>Créer une épreuve de séance</summary>
       <form id="training-event"><div class="grid3">
         <label>Séance<input name="lesson" required maxlength="70" placeholder="Ex. Séance 1"></label>
         <label>Nom de l’épreuve<input name="eventName" required maxlength="70" placeholder="Ex. Relais précision"></label>
-        <label>Format<select name="size"><option value="1">Individuel</option><option value="2">Binôme</option></select></label>
+        <label>Format<select name="size"><option value="1">Individuel</option><option value="2">Binôme</option><option value="elimination">Élimination</option></select></label>
         <label>Boucles de 200 m<input type="number" name="loops" min="0" max="100" required value="4"></label>
         <label>Passages au tir<input type="number" name="passes" min="0" max="30" required value="4"></label>
         <label>Mode de tir<select name="shotMode"><option value="standard">Standard</option><option value="penalty">Pénalité de temps par cible manquée</option><option value="rings">Anneaux à courir par cible manquée</option><option value="bonus">Bonus de temps par cible touchée</option></select></label>
         <label>Valeur par cible (secondes ou anneaux)<input type="number" name="shotAmount" step="any" min="0" placeholder="Ex. 10 secondes ou 1 anneau"></label>
         <label>Cibles par passage<input type="number" name="targets" min="1" max="100" required value="5"></label>
         <label>Classement qui attribue les points<select name="scoring"><option value="net">Net</option><option value="project">Au projet</option></select></label>
-      </div><p class="muted">Pour une épreuve de tir seul, saisis 0 boucle. Pour une épreuve de course seule, saisis 0 passage au tir.</p>
+      </div><p class="muted">Le format Élimination utilise automatiquement 1 boucle, 1 passage au tir et le classement net. Pour une épreuve de tir seul, saisis 0 boucle. Pour une épreuve de course seule, saisis 0 passage au tir.</p>
       <button class="primary">Créer l’épreuve</button></form></details>
       ${event ? `<section class="panel" id="training-entry"><label>Épreuve de séance<select data-training-select>
         ${group.events.map(item => labelOption(item.id, item.lesson + ' · ' + item.name, item.id === event.id)).join('')}</select></label>
         <div class="actions training-lesson-actions"><button type="button" class="danger" data-training="delete-lesson">Supprimer la séance</button></div>
-        <p class="training-format">${event.size === 2 ? 'Binôme' : 'Individuel'} · ${event.loops} × 200 m · ${event.passes} passage(s) au tir · ${event.targets} cibles/passage</p>
+        <p class="training-format">${event.elimination ? 'Élimination' : event.size === 2 ? 'Binôme' : 'Individuel'} · ${event.loops} × 200 m · ${event.passes} passage(s) au tir · ${event.targets} cibles/passage</p>
         ${shotMode(event) === 'rings' ? '<p class="muted">Inclus les anneaux courus dans le temps total saisi.</p>' : ''}
-        ${entryTable(group, event)}</section><details class="training-details"><summary>Détail des classements et des tirs</summary>${standings(group, event)}</details>` : ''}`;
+        ${event.elimination ? eliminationPanel(group, event) : entryTable(group, event)}</section>
+        ${event.elimination?.finished ? '' : `<details class="training-details"><summary>Détail des classements et des tirs</summary>${standings(group, event)}</details>`}` : ''}`;
   }
 
   function cyclePanel(group) {
@@ -450,11 +502,41 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
 
   function submit(id, form) {
     const group = currentClass();
-    if (id === 'training-event') {
+    if (id === 'training-eliminate' || id === 'training-final') {
+      const event = selectEvent(group);
+      const state = event?.elimination;
+      if (!state || state.finished || !state.active.length || event.results.length !== state.active.length) {
+        throw new Error('Enregistre tous les résultats du tour avant de le valider.');
+      }
+      const final = id === 'training-final';
+      const count = Number(form.get('count'));
+      if (!final && !integer(count, 1, state.active.length - 1)) {
+        throw new Error('Choisis combien de derniers éliminer. Il doit rester au moins un élève.');
+      }
+      const eliminated = final ? [] : eliminationOrder(event).slice(-count).map(row => row.members[0]);
+      const message = final ? 'Finale validée. Les points sont ajoutés au cumul.' : count + ' élève(s) éliminé(s). Tour suivant ouvert.';
+      if (!mutateClass(group.id, next => {
+        const saved = next.events.find(item => item.id === event.id);
+        if (final) {
+          saved.elimination.finished = true;
+        } else {
+          saved.elimination.rounds.push(eliminated);
+          saved.elimination.active = saved.elimination.active.filter(id => !eliminated.includes(id));
+          saved.results = [];
+        }
+      }, message)) return;
+      for (const key of drafts.keys()) {
+        if (key.startsWith('training-row-' + event.id + '-')) drafts.delete(key);
+      }
+    } else if (id === 'training-event') {
       const event = {id:newId(), lesson:form.get('lesson').trim(), name:form.get('eventName').trim(),
         loops:Number(form.get('loops')), passes:Number(form.get('passes')), targets:Number(form.get('targets')),
         size:Number(form.get('size')), scoring:form.get('scoring'),
         shotMode:form.get('shotMode') || 'standard', shotAmount:Number(form.get('shotAmount')), classSize:group.students.length, results:[]};
+      if (form.get('size') === 'elimination') {
+        Object.assign(event, {loops:1, passes:1, size:1, scoring:'net',
+          elimination:{active:group.students.map(student => student.id), rounds:[], finished:false}});
+      }
       if (!event.loops && event.scoring === 'project') throw new Error('Le classement au projet nécessite au moins une boucle.');
       if (shotMode(event) !== 'standard' && !event.passes) throw new Error('Choisis au moins un passage au tir pour ce mode.');
       if (shotMode(event) === 'rings' && (!event.loops || !integer(event.shotAmount, 1, 100))) {
@@ -484,6 +566,9 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       }, 'Équipe créée.')) return;
     } else {
       const event = selectEvent(group);
+      if (event.elimination && (event.elimination.finished || !event.elimination.active.includes(form.get('member0')))) {
+        throw new Error('Cet élève ne participe pas au tour en cours.');
+      }
       const previous = event.results.find(result => result.id === form.get('resultId'));
       const key = form.get('rowKey');
       const members = Array.from({length:event.size}, (_, i) => form.get('member' + i));
