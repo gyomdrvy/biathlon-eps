@@ -42,6 +42,26 @@ export function rankings(event, classSize) {
   };
 }
 
+export function drawTeams(students, teams, random = Math.random) {
+  function shuffle(items) {
+    const shuffled = items.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+  const order = shuffle(teams);
+  const categories = {girls: [], boys: [], other: []};
+  for (const student of students) {
+    const category = student.runningScale === 'girls' || student.runningScale === 'boys' ? student.runningScale : 'other';
+    categories[category].push(student);
+  }
+  // Keep the offset across categories to balance total team sizes as well.
+  const roster = Object.values(categories).flatMap(shuffle);
+  return new Map(roster.map((student, index) => [student.id, order[index % order.length].id]));
+}
+
 export function cycleScores(group) {
   const lessons = [...new Set((group.events ?? []).map(event => event.lesson))];
   const students = group.students.map(student => ({student, scores: lessons.map(() => 0), total: 0}));
@@ -59,8 +79,9 @@ export function cycleScores(group) {
   }
   const teams = (group.teams ?? []).map(team => {
     const members = students.filter(row => row.student.teamId === team.id);
-    return {team, members, total: sum(members.map(row => row.total))};
-  }).sort((a, b) => b.total - a.total);
+    const total = sum(members.map(row => row.total));
+    return {team, members, total, average: members.length ? total / members.length : null};
+  }).sort((a, b) => (b.average ?? -1) - (a.average ?? -1));
   return {lessons, students: students.sort((a, b) => b.total - a.total), teams};
 }
 
@@ -212,13 +233,14 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       return `<tr><td>${place}</td><th scope="row">${e(fullName(row.student))}</th>${row.scores.map(score => `<td>${score}</td>`).join('')}<td><strong>${row.total}</strong></td></tr>`;
     });
     let teamPlace = 0;
+    const averageFormat = new Intl.NumberFormat('fr-FR', {maximumFractionDigits:2});
     return `<section class="panel"><h2>Points individuels par séance</h2>
       ${table('Points individuels par séance', headers, rows)}
       <p class="muted">Le premier reçoit autant de points que l’effectif inscrit à la création de l’épreuve, puis un point de moins par place. Ex æquo au même rang et aux mêmes points. Chaque partenaire reçoit les points de son binôme. Un résultat absent vaut 0.</p>
       <h2>Classement des équipes</h2>
-      ${teams.length ? table('Classement des équipes', ['Rang', 'Équipe', 'Membres', 'Total'], teams.map((row, index) => {
-        if (!index || teams[index - 1].total !== row.total) teamPlace = index + 1;
-        return `<tr><td>${teamPlace}</td><th scope="row">${e(row.team.name)}</th><td>${e(row.members.map(item => fullName(item.student)).join(', ')) || '—'}</td><td><strong>${row.total}</strong></td></tr>`;
+      ${teams.length ? table('Classement des équipes', ['Rang', 'Équipe', 'Membres', 'Effectif', 'Total brut', 'Points par élève'], teams.map((row, index) => {
+        if (!index || teams[index - 1].average !== row.average) teamPlace = index + 1;
+        return `<tr><td>${row.average == null ? '—' : teamPlace}</td><th scope="row">${e(row.team.name)}</th><td>${e(row.members.map(item => fullName(item.student)).join(', ')) || '—'}</td><td>${row.members.length}</td><td>${row.total}</td><td><strong>${row.average == null ? '—' : averageFormat.format(row.average)}</strong></td></tr>`;
       })) : '<p>Crée des équipes dans l’onglet Équipes.</p>'}
     </section>`;
   }
@@ -226,7 +248,10 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
   function teamsPanel(group) {
     return `<section class="panel"><h2>Équipes</h2><form id="training-team"><div class="grid">
       <label>Nom de l’équipe<input required name="team" maxlength="70"></label></div><button class="primary">Créer l’équipe</button></form>
-      ${group.teams?.length ? `<p class="training-format">Choisis une équipe pour chaque élève. Le total d’une équipe additionne les points de ses membres actuels.</p>
+      ${group.teams?.length ? `<p class="training-format">Choisis une équipe pour chaque élève. Le classement additionne les points des membres actuels, puis les divise par l’effectif de l’équipe.</p>
+      ${group.teams.length >= 2 && group.students.length >= group.teams.length
+        ? '<button data-training="draw-teams" class="primary">Tirer les équipes au sort</button><small>Les choix Fille/Garçon dans Classes servent à équilibrer le tirage.</small>'
+        : '<small>Il faut au moins deux équipes et assez d’élèves pour toutes les remplir.</small>'}
       ${group.students.map(student => `<div class="row"><strong>${e(fullName(student))}</strong><label>Équipe<select data-training-member="${e(student.id)}">
         <option value="">Sans équipe</option>${group.teams.map(team => labelOption(team.id, team.name, student.teamId === team.id)).join('')}</select></label></div>`).join('')}` : ''}
     </section>`;
@@ -243,7 +268,13 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     const action = button.dataset.training;
     const group = currentClass();
     const event = selectEvent(group);
-    if (action === 'edit-result') {
+    if (action === 'draw-teams') {
+      if (group.students.some(student => student.teamId) && !window.confirm('Refaire le tirage et remplacer la répartition actuelle ?')) return;
+      const assignments = drawTeams(group.students, group.teams);
+      if (!mutateClass(group.id, next => {
+        for (const student of next.students) student.teamId = assignments.get(student.id);
+      }, 'Équipes tirées au sort.')) return;
+    } else if (action === 'edit-result') {
       selectedResult = button.dataset.resultId;
     } else if (action === 'cancel-result') {
       selectedResult = undefined;
