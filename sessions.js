@@ -1,10 +1,12 @@
-import {SHOOT_TARGET, formatTime, inputTime, parseTime, totalShotAccuracy} from './metrics.js';
+import {SHOOT_TARGET, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy} from './metrics.js';
 
 const integer = (value, min, max) => Number.isInteger(value) && value >= min && value <= max;
 const positive = value => Number.isFinite(value) && value > 0;
 const validName = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 70;
 const sum = values => values.reduce((total, value) => total + value, 0);
-const durationKey = seconds => Math.round(seconds * 1000);
+const durationKey = seconds => seconds == null ? Infinity : Math.round(seconds * 1000);
+const showTime = seconds => seconds == null ? '—' : formatTime(seconds);
+const shootingTotal = shots => shots.every(shot => shot.time != null) ? sum(shots.map(shot => shot.time)) : null;
 
 export function projectTime(event, members) {
   if (event.loops === 0 || !members.every(member => positive(member.reference))) return null;
@@ -17,7 +19,7 @@ export function rankings(event, classSize) {
   const net = event.results.map(result => ({
     ...result,
     hits: sum(result.shots.map(shot => shot.hits)),
-    shooting: sum(result.shots.map(shot => shot.time)),
+    shooting: shootingTotal(result.shots),
     gap: result.target == null ? null : result.total - result.target
   }));
   function rank(rows, keys) {
@@ -102,7 +104,7 @@ function validEvent(event) {
 }
 
 function validShot(shot, targets) {
-  return shot && positive(shot.time) && integer(shot.hits, 0, targets)
+  return shot && (shot.time == null || positive(shot.time)) && integer(shot.hits, 0, targets)
     && (shot.attempts == null || (Number.isSafeInteger(shot.attempts) && shot.attempts >= shot.hits));
 }
 
@@ -130,17 +132,17 @@ export function restoreTraining(source, group, newId) {
     const results = event.results.map(result => {
       if (!result || !Array.isArray(result.members) || result.members.length !== event.size
         || !Array.isArray(result.shots) || result.shots.length !== event.passes
-        || !result.shots.every(shot => validShot(shot, event.targets)) || !positive(result.total)
+        || !result.shots.every(shot => validShot(shot, event.targets)) || (event.loops ? !positive(result.total) : result.total != null && !positive(result.total))
         || (result.target != null && (!event.loops || !positive(result.target)))) invalid();
       const shooting = sum(result.shots.map(shot => shot.time));
-      if (event.loops ? result.total <= shooting : result.total !== shooting) invalid();
+      if (event.loops ? result.total <= shooting : result.total !== shootingTotal(result.shots)) invalid();
       const members = result.members.map(id => {
         if (!idMap.has(id) || used.has(id)) invalid();
         used.add(id);
         return idMap.get(id);
       });
       return {id: newId(), members, total: result.total, target: result.target ?? null,
-        shots: result.shots.map(({time, hits, attempts}) => ({time, hits, attempts:attempts ?? null}))};
+        shots: result.shots.map(({time, hits, attempts}) => ({time:time ?? null, hits, attempts:attempts ?? null}))};
     });
     const {lesson, name, loops, passes, targets, size, scoring, classSize} = event;
     return {id:newId(), lesson, name, loops, passes, targets, size, scoring, classSize, results};
@@ -172,6 +174,12 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       ? saved.target : projectTime(event, pupils);
   }
 
+  function accuracyLabel(hits, attempts) {
+    const count = Number(attempts);
+    if (hits == null || hits === '' || !Number.isSafeInteger(count) || count <= 0 || count < Number(hits)) return '';
+    return 'Réussite · ' + shotAccuracy({hits:Number(hits), attempts:count});
+  }
+
   function preview(form) {
     const group = currentClass();
     const event = selectEvent(group);
@@ -180,6 +188,9 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     const row = form.closest('tr');
     const totalDisplay = row.querySelector('[data-training-total]');
     const gapDisplay = row.querySelector('[data-training-gap]');
+    row.querySelectorAll('[data-shot-accuracy]').forEach((output, i) => {
+      output.textContent = accuracyLabel(values['hits' + i], values['attempts' + i]);
+    });
     if (totalDisplay) {
       const times = Array.from({length:event.passes}, (_, i) => parseTime(values['time' + i]));
       totalDisplay.textContent = times.every(positive) ? formatTime(sum(times)) : '—';
@@ -224,9 +235,10 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
           : `<strong data-training-total>${times.every(positive) ? formatTime(sum(times)) : '—'}</strong>`}</td>
         ${Array.from({length:event.passes}, (_, i) => {
           const shot = saved?.shots[i];
-          return `<td class="training-shot-cell"><input ${owner} name="time${i}" inputmode="decimal" required aria-label="Temps du tir ${i + 1}" placeholder="Temps" value="${e(value('time' + i, inputTime(shot?.time)))}">
+          return `<td class="training-shot-cell"><input ${owner} name="time${i}" inputmode="decimal" aria-label="Temps du tir ${i + 1} (facultatif)" placeholder="Temps (facultatif)" value="${e(value('time' + i, inputTime(shot?.time)))}">
             ${targetPicker(i, value('hits' + i, shot?.hits), event.targets, id)}
-            <input ${owner} type="number" name="attempts${i}" min="0" step="1" aria-label="Tirs réalisés au passage ${i + 1} (facultatif)" placeholder="Nombre de tirs" value="${e(value('attempts' + i, shot?.attempts))}"></td>`;
+            <input ${owner} type="number" name="attempts${i}" min="0" step="1" aria-label="Tirs réalisés au passage ${i + 1} (facultatif)" placeholder="Nombre de tirs" value="${e(value('attempts' + i, shot?.attempts))}">
+            <small data-shot-accuracy aria-live="polite">${accuracyLabel(value('hits' + i, shot?.hits), value('attempts' + i, shot?.attempts))}</small></td>`;
         }).join('')}
         ${event.loops ? `<td data-training-gap>${signed(target != null && positive(actual) ? actual - target : null)}</td>` : ''}
         <td><strong>${places.has(saved?.id) ? places.get(saved.id) + 'ᵉ' : '—'}</strong>
@@ -259,13 +271,13 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     const action = row => `<button data-training="edit-result" data-result-id="${e(row.id)}">Modifier</button>`;
     const netHeaders = ['Rang', 'Élève ou binôme', 'Temps total', ...(event.passes ? ['Touches', 'Temps au tir', 'Réussite au tir'] : []),
       ...(event.scoring === 'net' ? ['Points'] : []), 'Résultat'];
-    const net = ranked.net.map(row => `<tr><td>${row.place}</td><th scope="row">${names(row)}</th><td>${formatTime(row.total)}</td>
-      ${event.passes ? `<td>${row.hits} / ${event.passes * event.targets}</td><td>${formatTime(row.shooting)}</td>
+    const net = ranked.net.map(row => `<tr><td>${row.place}</td><th scope="row">${names(row)}</th><td>${showTime(row.total)}</td>
+      ${event.passes ? `<td>${row.hits} / ${event.passes * event.targets}</td><td>${showTime(row.shooting)}</td>
         <td>${totalShotAccuracy(row.shots)}<details><summary>Passages</summary><ul>${row.shots.map((shot, i) =>
-          `<li>${i + 1} · ${formatTime(shot.time)} · ${shot.hits} / ${event.targets}${shot.attempts == null ? '' : ` · ${shot.attempts} tirs`}</li>`).join('')}</ul></details></td>` : ''}
+          `<li>${i + 1} · ${showTime(shot.time)} · ${shot.hits} / ${event.targets}${shot.attempts == null ? '' : ` · ${shot.attempts} tirs`}</li>`).join('')}</ul></details></td>` : ''}
       ${event.scoring === 'net' ? `<td>${row.points}</td>` : ''}<td>${action(row)}</td></tr>`);
     const project = ranked.project.map(row => `<tr><td>${row.place}</td><th scope="row">${names(row)}</th>
-      <td>${formatTime(row.target)}</td><td>${formatTime(row.total)}</td><td>${signed(row.gap)}</td>
+      <td>${formatTime(row.target)}</td><td>${showTime(row.total)}</td><td>${signed(row.gap)}</td>
       ${event.scoring === 'project' ? `<td>${row.points}</td>` : ''}</tr>`);
     return `<section class="panel"><h2>Classement de la classe</h2><h3>Classement net${scored('net')}</h3>
       ${net.length ? table('Classement net', netHeaders, net) : '<p>Aucun résultat enregistré.</p>'}
@@ -436,13 +448,16 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       const shots = Array.from({length:event.passes}, (_, i) => {
         const rawAttempts = form.get('attempts' + i);
         const rawHits = form.get('hits' + i);
-        const shot = {time:parseTime(form.get('time' + i)), hits:Number(rawHits), attempts:rawAttempts === '' ? null : Number(rawAttempts)};
+        const rawTime = String(form.get('time' + i) ?? '').trim();
+        const time = rawTime ? parseTime(rawTime) : null;
+        if (rawTime && !positive(time)) throw new Error(`Vérifie le temps du passage ${i + 1}.`);
+        const shot = {time, hits:Number(rawHits), attempts:rawAttempts === '' || rawAttempts == null ? null : Number(rawAttempts)};
         if (rawHits == null || rawHits === '' || !validShot(shot, event.targets)) throw new Error(`Vérifie le temps, les touches et les tirs du passage ${i + 1}.`);
         return shot;
       });
       const shooting = sum(shots.map(shot => shot.time));
-      const total = event.loops ? parseTime(form.get('total')) : shooting;
-      if (!positive(total) || (event.loops && total <= shooting)) throw new Error('Saisis un temps total supérieur au temps passé au tir.');
+      const total = event.loops ? parseTime(form.get('total')) : shootingTotal(shots);
+      if (event.loops && (!positive(total) || total <= shooting)) throw new Error('Saisis un temps total supérieur au temps passé au tir.');
       const sameMembers = previous?.members.every((id, i) => id === members[i]);
       const target = sameMembers && previous.target !== null ? previous.target : projectTime(event, pupils);
       const result = {id:previous?.id ?? (event.size === 2 ? key : newId()), members, total, target, shots};
