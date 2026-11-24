@@ -238,12 +238,16 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       rows = group.students.map(pupil => row(pupil.id, resultByPupil.get(pupil.id), pupil));
     } else {
       const count = Math.max(0, Math.floor(group.students.length / 2) - event.results.length);
-      const pending = pairSlots.get(event.id) ?? [];
+      const results = new Map(event.results.map(result => [result.id, result]));
+      const slots = pairSlots.get(event.id) ?? [];
+      const pending = slots.filter(key => !results.has(key)).slice(0, count);
       while (pending.length < count) pending.push(newId());
-      pairSlots.set(event.id, pending);
-      rows = [...event.results.map(result => row(result.id, result)), ...pending.slice(0, count).map(key => row(key))];
+      const keep = new Set([...results.keys(), ...pending]);
+      const order = [...new Set([...slots.filter(key => keep.has(key)), ...keep])];
+      pairSlots.set(event.id, order);
+      rows = order.map(key => row(key, results.get(key)));
     }
-    return `<h3>Résultats de l’épreuve</h3><p class="muted">Classement ${event.scoring === 'project' ? 'au projet' : 'net'} · rang actualisé à l’enregistrement de la ligne.</p>
+    return `<h3>Résultats de l’épreuve</h3><p class="muted">Classement ${event.scoring === 'project' ? 'au projet' : 'net'} · rang actualisé à l’enregistrement de la ligne. Fais défiler le tableau horizontalement pour accéder à toutes les colonnes.</p>
       ${rows.length ? table('Saisie des résultats', headers, rows) : '<p>Ajoute des élèves dans Classes.</p>'}`;
   }
 
@@ -287,6 +291,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       <button class="primary">Créer l’épreuve</button></form></details>
       ${event ? `<section class="panel" id="training-entry"><label>Épreuve de séance<select data-training-select>
         ${group.events.map(item => labelOption(item.id, item.lesson + ' · ' + item.name, item.id === event.id)).join('')}</select></label>
+        <div class="actions training-lesson-actions"><button type="button" class="danger" data-training="delete-lesson">Supprimer la séance</button></div>
         <p class="training-format">${event.size === 2 ? 'Binôme' : 'Individuel'} · ${event.loops} × 200 m · ${event.passes} passage(s) au tir · ${event.targets} cibles/passage</p>
         ${entryTable(group, event)}</section><details class="training-details"><summary>Détail des classements et des tirs</summary>${standings(group, event)}</details>` : ''}`;
   }
@@ -340,6 +345,19 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       if (!mutateClass(group.id, next => {
         for (const student of next.students) student.teamId = assignments.get(student.id);
       }, 'Équipes tirées au sort.')) return;
+    } else if (action === 'delete-lesson') {
+      if (!event) return;
+      const ids = group.events.filter(item => item.lesson === event.lesson).map(item => item.id);
+      if (!window.confirm(`Supprimer « ${event.lesson} » et ses ${ids.length} épreuve(s), avec tous leurs résultats ?`)) return;
+      const removed = new Set(ids);
+      if (!mutateClass(group.id, next => {
+        next.events = next.events.filter(item => !removed.has(item.id));
+      }, 'Séance supprimée. Les classements ont été recalculés.')) return;
+      for (const id of ids) pairSlots.delete(id);
+      for (const key of drafts.keys()) {
+        if (ids.some(id => key.startsWith('training-row-' + id + '-'))) drafts.delete(key);
+      }
+      selectedEvent = undefined;
     } else if (action === 'edit-result') {
       const result = event.results.find(item => item.id === button.dataset.resultId);
       if (result) {
@@ -435,9 +453,6 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
         else saved.results[index] = result;
       }, 'Résultat de séance enregistré.')) return;
       drafts.delete('training-row-' + event.id + '-' + key);
-      if (event.size === 2 && !previous) {
-        pairSlots.set(event.id, (pairSlots.get(event.id) ?? []).filter(slot => slot !== key));
-      }
     }
     const scroll = document.querySelector('#training-entry .class-report-scroll')?.scrollLeft;
     render();

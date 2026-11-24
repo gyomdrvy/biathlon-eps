@@ -117,3 +117,11 @@ nav{grid-template-columns:repeat(5,minmax(0,1fr))}
 .training-shot-cell .target-picker{white-space:normal;text-align:left}
 .training-row-actions{display:grid;gap:4px;margin-top:6px}
 .training-details>.panel{margin-top:8px}
+
+.training-lesson-actions{margin-top:8px}
+#training-entry .class-report-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+#training-entry .class-report-table{border-collapse:separate;border-spacing:0;min-width:100%}
+#training-entry .class-report-table th:first-child{position:sticky;left:0;z-index:1;background:#fff;box-shadow:1px 0 var(--line);min-width:7rem}
+#training-entry .class-report-table thead th:first-child{background:#f8f2ef}
+#training-entry .class-report-table td{padding:7px}
+#training-entry .training-shot-cell input{width:100%}
