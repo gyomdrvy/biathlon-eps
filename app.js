@@ -48,7 +48,7 @@ const signedSpeed = value => `${value > 0 ? '+' : value < 0 ? '−' : ''}${decim
 const labelOption = (id, name, selected) => `<option value="${id}" ${selected ? 'selected' : ''}>${e(name)}</option>`;
 const newId = () => crypto.randomUUID();
 
-const training = createTraining({currentClass, mutateClass, render, e, fullName, newId, labelOption});
+const training = createTraining({currentClass, mutateClass, render, e, fullName, newId, labelOption, targetPicker});
 
 function classPicker() {
   if (!data.length) return '';
@@ -95,15 +95,15 @@ function classes() {
     <div class="actions"><button data-edit="${item.id}">Modifier</button><button data-open="${item.id}">Épreuve</button><button class="danger" data-delete="${item.id}" aria-label="Supprimer ${e(fullName(item))}">Supprimer</button></div></div>`).join('') : '<p class="muted">Ajoute un élève ou importe une liste.</p>'}</section>` : ''}`;
 }
 
-function targetPicker(index, hits) {
-  return `<fieldset class="target-picker"><legend>Cibles touchées</legend>
+function targetPicker(index, hits, max = 5) {
+  return `<fieldset class="target-picker" data-target-max="${max}"><legend>Cibles touchées</legend>
     <input type="hidden" name="hits${index}" value="${e(hits)}">
-    <div class="target-buttons">${Array.from({length:5}, (_, i) => {
+    <div class="target-buttons">${Array.from({length:max}, (_, i) => {
       const count = i + 1;
-      return `<button type="button" class="target-button" data-hits="${count}" aria-label="${count} sur 5" aria-pressed="${Number(hits) === count}" data-filled="${count <= Number(hits)}"></button>`;
+      return `<button type="button" class="target-button" data-hits="${count}" aria-label="${count} sur ${max}" aria-pressed="${Number(hits) === count}" data-filled="${count <= Number(hits)}"></button>`;
     }).join('')}</div>
     <div class="target-controls"><button type="button" data-hits="0" aria-pressed="${String(hits) === '0'}">0 cible</button>
-    <span class="target-count" aria-live="polite">${hits == null || hits === '' ? '—' : hits} / 5</span></div>
+    <span class="target-count" aria-live="polite">${hits == null || hits === '' ? '—' : hits} / ${max}</span></div>
   </fieldset>`;
 }
 
@@ -301,7 +301,7 @@ document.addEventListener('click', event => {
       target.setAttribute('aria-pressed', String(target === button));
       target.dataset.filled = String(Number(target.dataset.hits) <= Number(input.value));
     }
-    picker.querySelector('.target-count').textContent = input.value + ' / 5';
+    picker.querySelector('.target-count').textContent = input.value + ' / ' + picker.dataset.targetMax;
     input.dispatchEvent(new Event('input', {bubbles:true}));
     return;
   }

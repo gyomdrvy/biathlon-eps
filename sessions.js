@@ -154,7 +154,7 @@ export function removeTrainingStudent(group, studentId) {
   }
 }
 
-export function createTraining({currentClass, mutateClass, render, e, fullName, newId, labelOption}) {
+export function createTraining({currentClass, mutateClass, render, e, fullName, newId, labelOption, targetPicker}) {
   let tab = 'events';
   let selectedEvent;
   let selectedResult;
@@ -179,7 +179,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
         const shot = saved?.shots[i];
         return `<div class="card"><h3>Passage ${i + 1}</h3>
           <label>Temps au tir<input name="time${i}" inputmode="decimal" required value="${inputTime(shot?.time)}" placeholder="Ex. 30"></label>
-          <label>Touches / ${event.targets}<input type="number" name="hits${i}" required min="0" max="${event.targets}" value="${e(shot?.hits)}"></label>
+          ${targetPicker(i, shot?.hits, event.targets)}
           <label>Tirs réalisés (facultatif)<input type="number" name="attempts${i}" min="0" step="1" value="${e(shot?.attempts)}"></label>
         </div>`;
       }).join('')}</div>` : ''}
@@ -355,7 +355,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
         const rawAttempts = form.get('attempts' + i);
         const rawHits = form.get('hits' + i);
         const shot = {time:parseTime(form.get('time' + i)), hits:Number(rawHits), attempts:rawAttempts === '' ? null : Number(rawAttempts)};
-        if (rawHits === '' || !validShot(shot, event.targets)) throw new Error(`Vérifie le temps, les touches et les tirs du passage ${i + 1}.`);
+        if (rawHits == null || rawHits === '' || !validShot(shot, event.targets)) throw new Error(`Vérifie le temps, les touches et les tirs du passage ${i + 1}.`);
         return shot;
       });
       const shooting = sum(shots.map(shot => shot.time));
