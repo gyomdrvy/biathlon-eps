@@ -95,9 +95,9 @@ function classes() {
     <div class="actions"><button data-edit="${item.id}">Modifier</button><button data-open="${item.id}">Épreuve</button><button class="danger" data-delete="${item.id}" aria-label="Supprimer ${e(fullName(item))}">Supprimer</button></div></div>`).join('') : '<p class="muted">Ajoute un élève ou importe une liste.</p>'}</section>` : ''}`;
 }
 
-function targetPicker(index, hits, max = 5) {
+function targetPicker(index, hits, max = 5, formId) {
   return `<fieldset class="target-picker" data-target-max="${max}"><legend>Cibles touchées</legend>
-    <input type="hidden" name="hits${index}" value="${e(hits)}">
+    <input type="hidden" ${formId ? `form="${e(formId)}"` : ''} name="hits${index}" value="${e(hits)}">
     <div class="target-buttons">${Array.from({length:max}, (_, i) => {
       const count = i + 1;
       return `<button type="button" class="target-button" data-hits="${count}" aria-label="${count} sur ${max}" aria-pressed="${Number(hits) === count}" data-filled="${count <= Number(hits)}"></button>`;
@@ -331,7 +331,7 @@ document.addEventListener('click', event => {
 
 screen.addEventListener('input', event => {
   const form = event.target.form;
-  if (form?.id === 'training-result') training.preview(form);
+  if (form?.hasAttribute('data-training-result')) training.preview(form);
   if (form?.id === 'result-form') {
     resultDrafts.set(studentId, Object.fromEntries(new FormData(form)));
   }
@@ -436,7 +436,8 @@ screen.addEventListener('submit', async event => {
   const form = new FormData(target);
   const groupId = classId;
   try {
-    if (['training-event', 'training-team', 'training-result'].includes(target.id)) return training.submit(target.id, form);
+    if (target.hasAttribute('data-training-result')) return training.submit('training-result', form);
+    if (['training-event', 'training-team'].includes(target.id)) return training.submit(target.id, form);
     if (target.id === 'backup-form') {
       const restoreView = view === 'sessions' ? 'sessions' : 'class-report';
       const file = form.get('file');
