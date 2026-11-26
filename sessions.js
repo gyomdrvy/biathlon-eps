@@ -428,7 +428,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
 
   function entryTable(group, event) {
     const resultByPupil = new Map(event.results.map(result => [result.members[0], result]));
-    const places = new Map(rankings(event, event.classSize)[event.scoring].map(row => [row.id, row.place]));
+    const standingsById = new Map(rankings(event, event.classSize)[event.scoring].map(row => [row.id, row]));
     const headers = [event.size === 1 ? 'Nom' : 'Premier élève', ...(event.size === 2 ? ['Partenaire'] : []),
       'Temps total', ...Array.from({length:event.passes}, (_, i) => 'Tir ' + (i + 1)),
       ...(shotMode(event) !== 'standard' ? [shotMode(event) === 'rings' ? 'Anneaux à courir' : 'Correction du temps'] : []),
@@ -450,6 +450,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       const actual = event.loops ? parseTime(total) : readShootingTime(event, i => value('time' + i, inputTime(saved?.shots[i]?.time)));
       const adjustment = rowAdjustment(event, Array.from({length:event.passes}, (_, i) => value('hits' + i, saved?.shots[i]?.hits)), actual);
       const label = pupil ? fullName(pupil) : 'binôme';
+      const standing = standingsById.get(saved?.id);
       return `<tr id="line-${e(id)}"><th scope="row"><form id="${e(id)}" data-training-result>
         <input type="hidden" name="resultId" value="${e(saved?.id)}">
         <input type="hidden" name="rowKey" value="${e(key)}">
@@ -466,7 +467,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
         }).join('')}
         ${shotMode(event) !== 'standard' ? `<td data-training-adjustment>${adjustmentLabel(event, adjustment)}</td>` : ''}
         ${event.loops ? `<td data-training-gap>${signed(target != null && adjustment?.time != null ? adjustment.time - target : null)}</td>` : ''}
-        <td><strong>${places.has(saved?.id) ? places.get(saved.id) + 'ᵉ' : '—'}</strong>
+        <td><strong>${standing ? `${standing.place}ᵉ · ${standing.points} pt${standing.points > 1 ? 's' : ''}` : '—'}</strong>
           <div class="training-row-actions"><button ${owner} type="submit" class="primary">Enregistrer</button>
           ${saved ? `<button type="button" class="danger" data-training="delete-result" data-result-id="${e(saved.id)}">Effacer</button>` : ''}</div></td></tr>`;
     }
@@ -485,7 +486,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       pairSlots.set(event.id, order);
       rows = order.map(key => row(key, results.get(key)));
     }
-    return `<h3>Résultats de l’épreuve</h3><p class="muted">Classement ${event.scoring === 'project' ? 'au projet' : 'net'} · rang actualisé à l’enregistrement de la ligne. Fais défiler le tableau horizontalement pour accéder à toutes les colonnes.</p>
+    return `<h3>Résultats de l’épreuve</h3><p class="muted">Classement ${event.scoring === 'project' ? 'au projet' : 'net'} · rang et points actualisés à l’enregistrement de la ligne. Fais défiler le tableau horizontalement pour accéder à toutes les colonnes.</p>
       ${rows.length ? table('Saisie des résultats', headers, rows) : '<p>Ajoute des élèves dans Classes.</p>'}`;
   }
 
