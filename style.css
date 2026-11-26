@@ -134,3 +134,6 @@ nav{grid-template-columns:repeat(5,minmax(0,1fr))}
 .rank-move{display:inline-block;margin-left:4px;padding:1px 5px;border-radius:5px;background:#eee;color:#393939;font-weight:700;white-space:nowrap}
 .rank-up{color:#176037;background:#e2f5e9}.rank-down{color:#9e251a;background:#ffe8e5}
 #training-attendance,#training-correction{margin-top:10px}
+
+/* Flag images rendered from Noto Color Emoji (SIL Open Font License 1.1). */
+.nation-flag-image{display:inline-block;width:2em;height:1.5em;vertical-align:middle;background-image:url('./nation-flags.webp');background-repeat:no-repeat;background-size:1600% 1700%;flex:none}
