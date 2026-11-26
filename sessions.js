@@ -337,7 +337,8 @@ countries.sort((a,b) => a[1].localeCompare(b[1], 'fr'));
 // Cell order in the bundled Noto Emoji flag image, from left to right.
 const flagCodes = ',AC,AD,AE,AF,AG,AI,AL,AM,AO,AQ,AR,AS,AT,AU,AW,AX,AZ,BA,BB,BD,BE,BF,BG,BH,BI,BJ,BL,BM,BN,BO,BQ,BR,BS,BT,BV,BW,BY,BZ,CA,CC,CD,CF,CG,CH,CI,CK,CL,CM,CN,CO,CP,CQ,CR,CU,CV,CW,CX,CY,CZ,DE,DG,DJ,DK,DM,DO,DZ,EA,EC,EE,EG,EH,ER,ES,ET,EU,FI,FJ,FK,FM,FO,FR,GA,GB,GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GR,GS,GT,GU,GW,GY,HK,HM,HN,HR,HT,HU,IC,ID,IE,IL,IM,IN,IO,IQ,IR,IS,IT,JE,JM,JO,JP,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,LI,LK,LR,LS,LT,LU,LV,LY,MA,MC,MD,ME,MF,MG,MH,MK,ML,MM,MN,MO,MP,MQ,MR,MS,MT,MU,MV,MW,MX,MY,MZ,NA,NC,NE,NF,NG,NI,NL,NO,NP,NR,NU,NZ,OM,PA,PE,PF,PG,PH,PK,PL,PM,PN,PR,PS,PT,PW,PY,QA,RE,RO,RS,RU,RW,SA,SB,SC,SD,SE,SG,SH,SI,SJ,SK,SL,SM,SN,SO,SR,SS,ST,SV,SX,SY,SZ,TA,TC,TD,TF,TG,TH,TJ,TK,TL,TM,TN,TO,TR,TT,TV,TW,TZ,UA,UG,UM,UN,US,UY,UZ,VA,VC,VE,VG,VI,VN,VU,WF,WS,XK,YE,YT,ZA,ZM,ZW'.split(',');
 const flagIndex = new Map(flagCodes.map((code, index) => [code, index]));
-const countryAliases = new Map([['de','DE'], ['deu','DE'], ['ger','DE'], ['germany','DE'],
+const countryAliases = new Map([['fr','FR'], ['fra','FR'], ['france','FR'], ['equipe de france','FR'],
+  ['republique francaise','FR'], ['de','DE'], ['deu','DE'], ['ger','DE'], ['germany','DE'],
   ['deutschland','DE'], ['allemagne','DE'], ['republique federale d allemagne','DE']]);
 const normalizeCountry = value => String(value ?? '').normalize('NFD').replace(/\p{M}/gu,'')
   .toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
@@ -348,6 +349,7 @@ function nationFlag(team) {
   const embeddedCode = formerEmoji && String.fromCharCode(...[...formerEmoji].map(letter => letter.codePointAt(0) - 127397));
   const code = team.country || countryAliases.get(name) || localizedCountries.get(name) || embeddedCode
     || (flagIndex.has(name.toUpperCase()) ? name.toUpperCase() : '');
+  if (code === 'FR') return '<span aria-hidden="true" class="nation-flag-image nation-flag-fr"></span>';
   const index = flagIndex.get(code) ?? 0;
   const x = (index % 16) * 100 / 15;
   const y = Math.floor(index / 16) * 100 / 16;

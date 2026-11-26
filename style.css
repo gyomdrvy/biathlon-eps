@@ -144,3 +144,5 @@ button.danger{color:#a22517}
 .excel-quick-import button,.evaluation-tabs button{font-size:.875rem;padding:6px 12px}
 .evaluation-tabs{margin-bottom:10px}
 @media(max-width:600px){.class-tools{grid-template-columns:1fr}}
+
+.nation-flag-fr{background:linear-gradient(90deg,#002395 0 33.333%,#fff 33.333% 66.667%,#ed2939 66.667%);border:1px solid #d5d9df;border-radius:3px;box-sizing:border-box}
