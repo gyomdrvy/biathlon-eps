@@ -1,7 +1,7 @@
 import {analyse, grade, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
-import {backupClass, readClassBackup, gradebookCsv} from './transfers.js?v=30';
-import {createTraining, removeTrainingStudent} from './sessions.js?v=30';
+import {backupClass, readClassBackup, gradebookCsv} from './transfers.js?v=31';
+import {createTraining, removeTrainingStudent} from './sessions.js?v=31';
 
 const KEY = 'biathlon-eps-classes-v1';
 const screen = document.querySelector('#screen');
@@ -50,22 +50,31 @@ const newId = () => crypto.randomUUID();
 
 const training = createTraining({currentClass, mutateClass, render, e, fullName, newId, labelOption, targetPicker});
 
+function classSelect() {
+  return `<label>Classe<select id="class-select">${data.map(item => labelOption(item.id, item.name, item.id === classId)).join('')}</select></label>`;
+}
+
 function classPicker() {
   if (!data.length) return '';
   const group = currentClass();
   const students = group.students;
   const selectStudent = ['entry', 'report'].includes(view) && students.length;
   return `<section class="panel"><div class="grid">
-    <label>Classe<select id="class-select">${data.map(item => labelOption(item.id, item.name, item.id === classId)).join('')}</select></label>
+    ${classSelect()}
     ${selectStudent ? `<label>Élève<select id="student-select">${students.map(item => labelOption(item.id, fullName(item), item.id === studentId)).join('')}</select></label>` : ''}
   </div></section>`;
 }
 
 function backupPanel(group) {
-  return `<section class="panel"><h2>${group ? 'Sauvegarde des séances' : 'Restaurer une sauvegarde'}</h2>
-    ${group ? '<p>Le fichier JSON reprend les résultats enregistrés, les séances et les équipes. Les classements sont recalculés à la réimportation.</p><div class="actions class-export-actions"><button type="button" data-export="backup">Sauvegarder la classe (JSON)</button></div>' : '<p>Importe un fichier JSON de Biathlon EPS pour retrouver une classe avec ses résultats, ses séances et ses équipes.</p>'}
-    <form id="backup-form"><div class="grid"><label>Sauvegarde JSON<input type="file" name="file" accept=".json,application/json" required></label></div>
-      <button class="primary">Réimporter la classe</button></form></section>`;
+  return `<section class="panel"><h2>Sauvegarde et réimportation</h2>
+    <p>Le fichier JSON contient toute la classe, ses résultats, ses séances, ses appels et ses équipes.</p>
+    <div class="actions class-export-actions">
+      ${group ? '<button type="button" data-export="backup">Sauvegarder la classe (JSON)</button>' : ''}
+      <form id="backup-form" class="class-restore-form">
+        <input aria-label="Fichier de sauvegarde JSON" type="file" name="file" accept=".json,application/json" required>
+        <button type="submit" class="primary">Réimporter la classe</button>
+      </form>
+    </div></section>`;
 }
 
 function classes() {
@@ -74,8 +83,13 @@ function classes() {
   return `<section class="panel"><h2>Créer une classe</h2>
     <form id="new-class"><div class="grid"><label>Nom de la classe<input name="name" required maxlength="70" placeholder="Ex. 3e A"></label></div>
     <button class="primary">Créer la classe</button></form></section>
-  ${backupPanel()}
-  ${classPicker()}
+  ${group ? `<section class="panel class-tools"><div>${classSelect()}</div>
+    <div><h2>Importer depuis Excel</h2><form id="import-form" class="excel-quick-import">
+      <input aria-label="Classeur Excel" type="file" name="file" accept=".xlsx" required>
+      <button class="primary">Importer</button><a href="./modele-classe.xlsx" download>Modèle Excel</a>
+    </form><small>Première feuille · Nom, Prénom et Référence 200 m (facultative).</small></div>
+  </section>` : ''}
+  ${backupPanel(group)}
   ${group ? `<section class="panel"><h2>${edited ? 'Modifier un élève' : 'Ajouter un élève'}</h2>
     <form id="student-form"><div class="grid3">
     <label>Nom<input name="last" required maxlength="100" value="${e(edited?.last)}"></label>
@@ -83,8 +97,6 @@ function classes() {
     <label>Référence sur 200 m<input name="reference" inputmode="decimal" value="${inputTime(edited?.reference)}" placeholder="Ex. 42,5"></label>
     </div><div class="actions"><button class="primary">${edited ? 'Enregistrer la modification' : 'Ajouter l’élève'}</button>
     ${edited ? '<button type="button" data-action="cancel">Annuler</button>' : ''}</div></form></section>
-    <section class="panel"><h2>Importer depuis Excel</h2><p class="muted">Première feuille du fichier .xlsx. Colonnes Nom, Prénom et, si disponible, Référence 200 m.</p>
-    <form id="import-form"><div class="grid"><label>Classeur Excel<input type="file" name="file" accept=".xlsx" required></label></div><div class="actions"><button class="primary">Importer dans ${e(group.name)}</button><a href="./modele-classe.xlsx" download>Modèle Excel</a></div></form></section>
     <section class="panel"><h2>Élèves · ${group.students.length}</h2>
     ${group.students.length ? '<p class="muted">Référence sur 200 m en secondes (42,5) ou en minutes.secondes (0.42). La saisie s’enregistre quand tu quittes le champ.</p>' : ''}
     ${group.students.length ? group.students.map(item => `<div class="row student-row"><strong>${e(fullName(item))}</strong>
@@ -92,7 +104,7 @@ function classes() {
       <option value="">Choisir</option>${labelOption('girls', 'Fille', item.runningScale === 'girls')}${labelOption('boys', 'Garçon', item.runningScale === 'boys')}
     </select></label>
     <label>Référence 200 m<input data-reference="${item.id}" aria-label="Référence 200 m · ${e(fullName(item))}" inputmode="decimal" value="${inputTime(item.reference)}" placeholder="Ex. 42,5"></label>
-    <div class="actions"><button data-edit="${item.id}">Modifier</button><button data-open="${item.id}">Épreuve</button><button class="danger" data-delete="${item.id}" aria-label="Supprimer ${e(fullName(item))}">Supprimer</button></div></div>`).join('') : '<p class="muted">Ajoute un élève ou importe une liste.</p>'}</section>` : ''}`;
+    <div class="actions"><button data-edit="${item.id}">Modifier</button><button class="danger" data-delete="${item.id}" aria-label="Supprimer ${e(fullName(item))}">Supprimer</button></div></div>`).join('') : '<p class="muted">Ajoute un élève ou importe une liste.</p>'}</section>` : ''}`;
 }
 
 function targetPicker(index, hits, max = 5, formId) {
@@ -215,7 +227,7 @@ function classAverages(students, grades) {
 function classReport() {
   const group = currentClass();
   if (!group?.students.length) {
-    return classPicker() + '<section class="panel"><h2>Bilan de classe</h2><p>Aucun élève à afficher.</p></section>';
+    return '<section class="panel"><h2>Bilan de classe</h2><p>Aucun élève à afficher.</p></section>';
   }
   const grades = group.students.map(studentGrade);
   const rows = group.students.map((student, index) => {
@@ -228,9 +240,8 @@ function classReport() {
       <td><input data-investment="${student.id}" inputmode="decimal" aria-label="Investissement sur 4 · ${e(fullName(student))}" value="${e(student.investment?.toString().replace('.', ','))}" placeholder="—"></td>
       <td class="final-mark" data-final-mark>${points(mark?.total ?? null, 20)}</td></tr>`;
   }).join('');
-  return classPicker() + `<section class="panel"><h2 id="class-report-title">Bilan de classe · ${e(group.name)}</h2>
+  return `<section class="panel"><h2 id="class-report-title">Bilan de classe · ${e(group.name)}</h2>
     <div class="actions class-export-actions">
-      <button type="button" data-export="backup">Sauvegarder la classe (JSON)</button>
       <button type="button" data-export="idoceo">Exporter vers iDoceo (CSV)</button>
     </div>
     <h3 class="class-averages-title">Moyennes de la classe</h3>
@@ -245,19 +256,30 @@ function classReport() {
   </section>`;
 }
 
+function evaluationNavigation() {
+  return `<div class="actions evaluation-tabs" role="group" aria-label="Vues de l’évaluation">
+    ${[['entry','Saisie'],['report','Bilan'],['class-report','Bilan de classe']].map(([value,label]) =>
+      `<button type="button" data-go="${value}" class="${view === value ? 'primary' : ''}" aria-pressed="${view === value}">${label}</button>`).join('')}
+  </div>`;
+}
+
 function render() {
   if (!currentClass()) classId = data[0]?.id;
   if (!currentStudent()) studentId = currentClass()?.students[0]?.id;
-  for (const button of document.querySelectorAll('[data-view]')) {
-    if (button.dataset.view === view) button.setAttribute('aria-current', 'page');
+  const mainView = ['entry','report','class-report'].includes(view) ? 'entry' : view;
+  for (const button of document.querySelectorAll('nav [data-view]')) {
+    if (button.dataset.view === mainView) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
   const student = currentStudent();
   if (view === 'classes') screen.innerHTML = classes();
-  else if (view === 'sessions') screen.innerHTML = classPicker() + backupPanel(currentClass()) + training.html(currentClass());
-  else if (view === 'class-report') screen.innerHTML = classReport();
-  else if (!student) screen.innerHTML = classPicker() + '<section class="panel"><h2>Aucun élève dans cette classe</h2><button data-go="classes">Gérer les classes</button></section>';
-  else screen.innerHTML = classPicker() + (view === 'entry' ? entry(student) : report(student));
+  else if (view === 'sessions') screen.innerHTML = classPicker() + training.html(currentClass());
+  else {
+    const content = view === 'class-report' ? classReport()
+      : !student ? '<section class="panel"><h2>Aucun élève dans cette classe</h2><button data-go="classes">Gérer les classes</button></section>'
+      : view === 'entry' ? entry(student) : report(student);
+    screen.innerHTML = evaluationNavigation() + classPicker() + content;
+  }
 }
 
 function go(target) {
@@ -440,7 +462,6 @@ screen.addEventListener('submit', async event => {
     if (target.id === 'training-round') return training.submit(event.submitter?.value === 'final' ? 'training-final' : 'training-eliminate', form);
     if (['training-event', 'training-team', 'training-attendance', 'training-correction'].includes(target.id)) return training.submit(target.id, form);
     if (target.id === 'backup-form') {
-      const restoreView = view === 'sessions' ? 'sessions' : 'class-report';
       const file = form.get('file');
       const button = target.querySelector('button');
       button.disabled = true;
@@ -462,7 +483,7 @@ screen.addEventListener('submit', async event => {
       studentId = undefined;
       editingId = undefined;
       training.reset();
-      view = restoreView;
+      view = 'classes';
     } else if (target.id === 'new-class') {
       const name = form.get('name').trim();
       if (!name) throw new Error('Saisis un nom de classe.');

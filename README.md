@@ -43,7 +43,7 @@ En haut du **Bilan de classe**, les moyennes des cinq critères et de la note fi
 
 ## Sauvegarde et export iDoceo
 
-Dans **Bilan de classe**, **Sauvegarder la classe (JSON)** enregistre la liste des élèves, les références, les résultats enregistrés de l’épreuve et l’investissement. Dans **Classes**, **Réimporter la classe** ouvre cette sauvegarde dans une nouvelle classe. Les copies d’une classe existante reçoivent un numéro.
+Dans **Classes → Sauvegarde et réimportation**, exporte l’ensemble de la classe en JSON, y compris les résultats, séances, appels et équipes. **Réimporter la classe** ouvre une copie indépendante. Les copies d’une classe existante reçoivent un numéro.
 
 **Exporter vers iDoceo (CSV)** télécharge un fichier contenant le nom, le prénom, les cinq critères et la note finale sur 20. Les notes non renseignées restent vides. Dans l’assistant d’importation iDoceo, associe les colonnes Nom et Prénom et sélectionne les colonnes de notes à importer.
 
@@ -55,4 +55,3 @@ Le classement net est établi au temps total. En tir seul, davantage de touches 
 
 À la création de l’épreuve, choisis si le classement net ou au projet attribue les points. Le premier reçoit autant de points que l’effectif de la classe à la création, puis un point de moins par place. Chaque partenaire reçoit les points de son binôme. Les épreuves d’une même séance sont additionnées. Dans **Équipes**, crée les équipes puis utilise **Tirer les équipes au sort** pour équilibrer l’effectif et les catégories Fille/Garçon. Les élèves sans catégorie sont inclus dans le tirage. Le classement compare les équipes sur le même nombre de membres, selon l’effectif de la plus petite équipe non vide. Les plus faibles totaux individuels sont écartés du score d’équipe à raison d’un résultat par membre en surplus. Les équipes vides restent sans rang. La sauvegarde JSON inclut également les séances et les équipes.
 
-Dans **Séances**, **Sauvegarder la classe (JSON)** exporte l’avancement enregistré, les épreuves, les équipes et les données de l’évaluation. **Réimporter la classe** ouvre une copie indépendante dans Séances et recalcule les classements individuels et d’équipes.

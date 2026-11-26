@@ -9,14 +9,13 @@ header{background:#201a19;color:white}
 .brand b{color:#ff9367}
 .local{color:#e7ccc2;font-size:.81rem;text-align:right}
 main{padding-bottom:42px}
-.hero{margin-top:24px;min-height:224px;border-radius:24px;background:linear-gradient(112deg,#451c18,#942b20 66%,#bb4525);color:white;position:relative;overflow:hidden;padding:clamp(22px,5vw,41px)}
+.hero{margin-top:24px;min-height:0;border-radius:24px;background:linear-gradient(112deg,#451c18,#942b20 66%,#bb4525);color:white;position:relative;overflow:hidden;padding:clamp(22px,5vw,41px)}
 .hero>div:first-child{position:relative;z-index:1}
 h1,h2,h3,p{margin:0}
 h1{font-size:clamp(2.6rem,6vw,4.35rem);line-height:1;letter-spacing:-.06em}
-.hero p{margin:8px 0 23px;color:#ffe1d5}
+.hero p{margin:8px 0 0;color:#ffe1d5}
 .hero-target{position:absolute;width:420px;aspect-ratio:1;right:-84px;top:-84px;opacity:.29;background:repeating-radial-gradient(circle,transparent 0 43px,#ffc5a4 45px 47px,transparent 49px 70px)}
-.facts,.actions{display:flex;flex-wrap:wrap;gap:9px}
-.facts span{background:#37161096;border:1px solid #ffc5a44a;padding:6px 12px;border-radius:8px;font-size:.89rem}
+.actions{display:flex;flex-wrap:wrap;gap:9px}
 nav{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;background:#eee3de;border-radius:14px;padding:5px;margin:20px 0 14px}
 button,input,select{font:inherit;min-height:46px;border-radius:9px}
 button{cursor:pointer;padding:8px 14px;border:1px solid var(--line);background:white;color:var(--ink);font-weight:680}
@@ -81,10 +80,10 @@ button.danger{color:#a22517}
 .target-controls{display:flex;align-items:center;gap:8px;margin-top:4px}
 .target-count{font-size:.92rem;font-weight:700}
 @media(max-width:420px){#result-form .shots{grid-template-columns:1fr}}
-nav{grid-template-columns:repeat(4,minmax(0,1fr))}
+
 .student-row{grid-template-columns:minmax(0,1fr) minmax(105px,125px) minmax(110px,150px) auto}
 @media(max-width:750px){.student-row{grid-template-columns:minmax(0,1fr) minmax(100px,140px) minmax(105px,145px)}.student-row .actions{grid-column:1/-1}}
-@media(max-width:490px){nav{grid-template-columns:repeat(2,minmax(0,1fr))}.student-row{grid-template-columns:1fr 1fr}.student-row strong{grid-column:1/-1}}
+@media(max-width:490px){.student-row{grid-template-columns:1fr 1fr}.student-row strong{grid-column:1/-1}}
 .class-report-scroll{margin:12px 0;overflow:auto}
 .class-report-table{border-collapse:collapse;width:100%;min-width:640px}
 .class-report-table th,.class-report-table td{border-bottom:1px solid var(--line);padding:10px;text-align:center}
@@ -100,8 +99,8 @@ nav{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:850px){.class-averages{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:480px){.class-averages{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .class-export-actions{margin-top:12px}
-nav{grid-template-columns:repeat(5,minmax(0,1fr))}
-@media(max-width:640px){nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
 .training-tabs{margin-bottom:14px}
 .training-format{margin:12px 0}
 #training-event .muted{margin:0 0 12px}
@@ -137,3 +136,11 @@ nav{grid-template-columns:repeat(5,minmax(0,1fr))}
 
 /* Flag images rendered from Noto Color Emoji (SIL Open Font License 1.1). */
 .nation-flag-image{display:inline-block;width:2em;height:1.5em;vertical-align:middle;background-image:url('./nation-flags.webp');background-repeat:no-repeat;background-size:1600% 1700%;flex:none}
+
+.class-tools{display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,2fr);gap:18px;align-items:start}
+.class-tools h2{font-size:1rem}
+.excel-quick-import,.class-restore-form{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.excel-quick-import input,.class-restore-form input{width:auto;max-width:100%;margin:4px 0}
+.excel-quick-import button,.evaluation-tabs button{font-size:.875rem;padding:6px 12px}
+.evaluation-tabs{margin-bottom:10px}
+@media(max-width:600px){.class-tools{grid-template-columns:1fr}}
