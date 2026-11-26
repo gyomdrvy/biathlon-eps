@@ -1,6 +1,6 @@
-const CACHE = 'biathlon-eps-v28';
-const ASSETS = ['./', './index.html', './style.css', './app.js?v=28', './metrics.js',
-  './excel.js', './transfers.js?v=28', './sessions.js?v=28', './vendor/pako_inflate.min.js', './manifest.webmanifest', './icon-192.png', './icon-512.png',
+const CACHE = 'biathlon-eps-v29';
+const ASSETS = ['./', './index.html', './style.css', './app.js?v=29', './metrics.js',
+  './excel.js', './transfers.js?v=29', './sessions.js?v=29', './vendor/pako_inflate.min.js', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './apple-touch-icon.png', './modele-classe.xlsx'];
 
 self.addEventListener('install', event => {

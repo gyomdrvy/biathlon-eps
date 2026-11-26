@@ -1,7 +1,7 @@
 import {analyse, grade, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
-import {backupClass, readClassBackup, gradebookCsv} from './transfers.js?v=28';
-import {createTraining, removeTrainingStudent} from './sessions.js?v=28';
+import {backupClass, readClassBackup, gradebookCsv} from './transfers.js?v=29';
+import {createTraining, removeTrainingStudent} from './sessions.js?v=29';
 
 const KEY = 'biathlon-eps-classes-v1';
 const screen = document.querySelector('#screen');
@@ -347,7 +347,7 @@ screen.addEventListener('keydown', event => {
 
 screen.addEventListener('change', event => {
   const input = event.target;
-  if ('trainingSelect' in input.dataset || input.dataset.trainingMember) return training.change(input);
+  if ('trainingSelect' in input.dataset || input.dataset.trainingMember || input.dataset.trainingFlag) return training.change(input);
   const investmentId = input.dataset.investment;
   if (investmentId) {
     const student = currentClass().students.find(item => item.id === investmentId);
@@ -438,7 +438,7 @@ screen.addEventListener('submit', async event => {
   try {
     if (target.hasAttribute('data-training-result')) return training.submit('training-result', form);
     if (target.id === 'training-round') return training.submit(event.submitter?.value === 'final' ? 'training-final' : 'training-eliminate', form);
-    if (['training-event', 'training-team'].includes(target.id)) return training.submit(target.id, form);
+    if (['training-event', 'training-team', 'training-attendance', 'training-correction'].includes(target.id)) return training.submit(target.id, form);
     if (target.id === 'backup-form') {
       const restoreView = view === 'sessions' ? 'sessions' : 'class-report';
       const file = form.get('file');

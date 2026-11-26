@@ -83,6 +83,13 @@ function eliminationOrder(event) {
 }
 
 export function eliminationRanking(event) {
+  if (event.scoredElimination) {
+    let place = 1;
+    return event.scoredElimination.map((row,i,rows) => {
+      if (i && rows[i-1].place !== row.place) place = i+1;
+      return {...row, place, points:Math.max(0, event.classSize - place + 1)};
+    });
+  }
   const {active, rounds, finished, manualRounds = [], finalOrder} = event.elimination;
   const rows = [];
   let place = finished ? 1 : active.length + 1;
@@ -100,16 +107,58 @@ export function eliminationRanking(event) {
   for (let i = rounds.length - 1; i >= 0; i--) {
     add(rounds[i], 'Tour ' + (i + 1), manualRounds.includes(i));
   }
+  if (event.elimination.correction) {
+    return rows.map((row, index) => ({...row, members:[event.elimination.correction[index]]}));
+  }
   return rows;
+}
+
+const attendanceStates = ['present', 'absent', 'excused'];
+const attendanceFor = (group, lesson, id) => group.attendance?.find(row => row.lesson === lesson)?.entries
+  .find(entry => entry.id === id)?.status ?? 'present';
+const isPresent = (group, lesson, id) => attendanceFor(group, lesson, id) === 'present';
+
+function eligibleEvent(group, event) {
+  const present = id => isPresent(group, event.lesson, id);
+  const excluded = group.students.filter(student => !present(student.id)).length;
+  if (!excluded) return event;
+  const results = event.results.filter(result => result.members.every(present));
+  if (!event.elimination) return {...event, results, classSize:Math.max(0, event.classSize - excluded)};
+  const state = event.elimination;
+  if (state.finished) return {...event, scoredElimination:eliminationRanking(event).filter(row => present(row.members[0])),
+    classSize:Math.max(0, event.classSize - excluded)};
+  return {...event, results, classSize:Math.max(0, event.classSize - excluded), elimination:{
+    ...state, active:state.active.filter(present), rounds:state.rounds.map(ids => ids.filter(present)),
+    finalOrder:state.finalOrder?.filter(present) ?? state.finalOrder,
+    correction:state.correction?.filter(present)
+  }};
+}
+
+function scoredRows(group, rawEvent) {
+  const event = eligibleEvent(group, rawEvent);
+  return event.elimination ? (event.elimination.finished ? eliminationRanking(event) : [])
+    : rankings(event, event.classSize)[event.scoring];
+}
+
+function orderedRanks(rows, score) {
+  const sorted = rows.slice().sort((a, b) => (score(b) ?? -1) - (score(a) ?? -1));
+  let place = 0;
+  return sorted.map((row, i) => {
+    const value = score(row);
+    if (!i || score(sorted[i-1]) !== value) place = i+1;
+    return {...row, place:value == null ? null : place};
+  });
 }
 
 export function cycleScores(group) {
   const lessons = [...new Set((group.events ?? []).map(event => event.lesson))];
-  const students = group.students.map(student => ({student, scores: lessons.map(() => 0), total: 0}));
+  const students = group.students.map(student => ({student, scores:lessons.map(() => 0), total:0}));
   const byId = new Map(students.map(row => [row.student.id, row]));
+  const scored = new Set();
   for (const event of group.events ?? []) {
     const index = lessons.indexOf(event.lesson);
-    const rows = event.elimination ? (event.elimination.finished ? eliminationRanking(event) : []) : rankings(event, event.classSize)[event.scoring];
+    const rows = scoredRows(group, event);
+    if (rows.length) scored.add(index);
     for (const row of rows) {
       for (const id of row.members) {
         const profile = byId.get(id);
@@ -119,20 +168,45 @@ export function cycleScores(group) {
       }
     }
   }
+  const last = [...scored].sort((a,b) => a-b).at(-1);
   const teams = (group.teams ?? []).map(team => {
     const members = students.filter(row => row.student.teamId === team.id);
-    const total = sum(members.map(row => row.total));
-    return {team, members, total};
+    return {team, members, total:sum(members.map(row => row.total))};
   });
-  const sizes = teams.map(row => row.members.length).filter(size => size > 0);
-  const countedSize = sizes.length ? Math.min(...sizes) : 0;
-  for (const row of teams) {
-    const best = row.members.map(member => member.total).sort((a, b) => b - a).slice(0, countedSize);
-    row.counted = best.length;
-    row.teamScore = best.length ? sum(best) : null;
+  const minimum = sizes => sizes.some(Boolean) ? Math.min(...sizes.filter(Boolean)) : 0;
+  const counted = minimum(teams.map(row => row.members.length));
+  const top = (values, size) => sum(values.sort((a,b) => b-a).slice(0,size));
+  function nationScores(limit) {
+    const ordinary = [];
+    const attended = [];
+    for (let i=0; i<limit; i++) {
+      if (!scored.has(i)) continue;
+      if (students.some(row => !isPresent(group, lessons[i], row.student.id))) attended.push(i);
+      else ordinary.push(i);
+    }
+    const adjusted = teams.map(row => top(row.members.map(member => sum(ordinary.map(i => member.scores[i]))), counted));
+    for (const index of attended) {
+      const present = teams.map(row => row.members.filter(member => isPresent(group, lessons[index], member.student.id)));
+      const size = minimum(present.map(rows => rows.length));
+      const points = present.map(rows => rows.length ? top(rows.map(row => row.scores[index]), size) : null);
+      const competing = points.filter(score => score !== null);
+      // A nation entirely absent for the lesson receives the field's mean, a neutral contribution.
+      const neutral = competing.length ? sum(competing) / competing.length : 0;
+      points.forEach((value,i) => {if (teams[i].members.length) adjusted[i] += value ?? neutral;});
+    }
+    return teams.map((row,i) => ({...row, counted, teamScore:row.members.length ? Math.round(adjusted[i]*1000000)/1000000 : null}));
   }
-  teams.sort((a, b) => (b.teamScore ?? -1) - (a.teamScore ?? -1));
-  return {lessons, students: students.sort((a, b) => b.total - a.total), teams};
+  function movements(rows, previous, id) {
+    const before = new Map(previous.map(row => [id(row), row.place]));
+    return rows.map(row => ({...row, movement:row.place == null || before.get(id(row)) == null ? null : before.get(id(row)) - row.place}));
+  }
+  const baseline = scored.size > 1 ? last : null;
+  const rankedStudents = orderedRanks(students, row => row.total);
+  const rankedTeams = orderedRanks(nationScores(lessons.length), row => row.teamScore);
+  const priorStudents = baseline == null ? [] : orderedRanks(students, row => sum(row.scores.slice(0, baseline)));
+  const priorTeams = baseline == null ? [] : orderedRanks(nationScores(baseline), row => row.teamScore);
+  return {lessons, students:movements(rankedStudents, priorStudents, row => row.student.id),
+    teams:movements(rankedTeams, priorTeams, row => row.team.id), current:lessons[last]};
 }
 
 function validEvent(event) {
@@ -161,13 +235,28 @@ export function restoreTraining(source, group, newId) {
     if (!team || typeof team.id !== 'string' || teams.has(team.id) || !validName(team.name)) invalid();
     const id = newId();
     teams.set(team.id, id);
-    return {id, name: team.name};
+    return {id, name: team.name, ...(validCountry(team.country) ? {country:team.country} : {})};
   });
   group.students.forEach((student, index) => {
     const teamId = source.students[index].teamId;
     if (teamId && !teams.has(teamId)) invalid();
     student.teamId = teams.get(teamId) ?? null;
   });
+  if (source.attendance !== undefined) {
+    if (!Array.isArray(source.attendance)) invalid();
+    const seen = new Set();
+    group.attendance = source.attendance.map(row => {
+      if (!row || !validName(row.lesson) || seen.has(row.lesson) || !Array.isArray(row.entries)) invalid();
+      seen.add(row.lesson);
+      const ids = new Set();
+      const entries = row.entries.map(entry => {
+        if (!entry || !idMap.has(entry.id) || ids.has(entry.id) || !attendanceStates.includes(entry.status)) invalid();
+        ids.add(entry.id);
+        return {id:idMap.get(entry.id), status:entry.status};
+      });
+      return {lesson:row.lesson, entries};
+    });
+  }
   group.events = source.events.map(event => {
     if (!validEvent(event) || !Number.isSafeInteger(event.classSize) || event.classSize < 0
       || !Array.isArray(event.results)) invalid();
@@ -189,7 +278,7 @@ export function restoreTraining(source, group, newId) {
     });
     let elimination;
     if (event.elimination != null) {
-      const {active, rounds, finished, manualRounds = [], finalOrder} = event.elimination;
+      const {active, rounds, finished, manualRounds = [], finalOrder, correction} = event.elimination;
       if (event.loops !== 1 || event.passes !== 1 || event.size !== 1 || event.scoring !== 'net'
         || !Array.isArray(active) || !Array.isArray(rounds) || !rounds.every(Array.isArray) || typeof finished !== 'boolean') invalid();
       const ids = [...active, ...rounds.flat()];
@@ -197,12 +286,16 @@ export function restoreTraining(source, group, newId) {
         || event.results.some(row => !active.includes(row.members[0]))
         || !Array.isArray(manualRounds) || manualRounds.some(index => !integer(index, 0, rounds.length - 1))
         || (finalOrder !== undefined && (!finished || (finalOrder !== null &&
-          (!Array.isArray(finalOrder) || finalOrder.length !== active.length ||
-            new Set(finalOrder).size !== active.length || finalOrder.some(id => !active.includes(id))))))
+          (!Array.isArray(finalOrder) ||
+            new Set(finalOrder).size !== finalOrder.length || finalOrder.some(id => !active.includes(id))))))
         || (finished && finalOrder === undefined && results.length !== active.length)) invalid();
+      const rankedIds = [...(Array.isArray(finalOrder) ? finalOrder : active), ...rounds.flat()];
+      if (correction !== undefined && (!finished || !Array.isArray(correction) || correction.length !== rankedIds.length
+        || new Set(correction).size !== rankedIds.length || correction.some(id => !rankedIds.includes(id)))) invalid();
       elimination = {active:active.map(id => idMap.get(id)),
         rounds:rounds.map(ids => ids.map(id => idMap.get(id))), finished, manualRounds,
-        ...(finalOrder !== undefined ? {finalOrder:finalOrder?.map(id => idMap.get(id)) ?? null} : {})};
+        ...(finalOrder !== undefined ? {finalOrder:finalOrder?.map(id => idMap.get(id)) ?? null} : {}),
+        ...(correction ? {correction:correction.map(id => idMap.get(id))} : {})};
     }
     const {lesson, name, loops, passes, targets, size, scoring, classSize} = event;
     return {id:newId(), lesson, name, loops, passes, targets, size, scoring, classSize, shotMode:shotMode(event), shotAmount:event.shotAmount ?? 0, results, ...(elimination ? {elimination} : {})};
@@ -211,22 +304,49 @@ export function restoreTraining(source, group, newId) {
 }
 
 export function removeTrainingStudent(group, studentId) {
+  for (const row of group.attendance ?? []) row.entries = row.entries.filter(entry => entry.id !== studentId);
   for (const event of group.events ?? []) {
-    event.results = event.results.filter(result => !result.members.includes(studentId));
     if (event.elimination) {
+      const state = event.elimination;
+      if (state.correction) {
+        const slots = eliminationRanking({...event, elimination:{...state, correction:undefined}});
+        const index = slots.findIndex(row => row.members[0] === studentId);
+        if (index >= 0) {
+          const replacement = state.correction[index];
+          state.correction = state.correction.map(id => id === studentId ? replacement : id).filter((_, i) => i !== index);
+        }
+      }
       event.elimination.active = event.elimination.active.filter(id => id !== studentId);
       if (event.elimination.finalOrder) event.elimination.finalOrder = event.elimination.finalOrder.filter(id => id !== studentId);
       event.elimination.rounds = event.elimination.rounds.map(ids => ids.filter(id => id !== studentId));
     }
+    event.results = event.results.filter(result => !result.members.includes(studentId));
   }
 }
+
+const countryNames = new Intl.DisplayNames(['fr'], {type:'region'});
+const countries = [];
+for (const a of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+  for (const b of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+    const code = a + b;
+    const label = countryNames.of(code);
+    if (label !== code && !['ZZ','XA','XB'].includes(code)) countries.push([code,label]);
+  }
+}
+countries.sort((a,b) => a[1].localeCompare(b[1], 'fr'));
+function nationFlag(team) {
+  const code = team.country || countries.find(([,label]) => label.localeCompare(team.name,'fr',{sensitivity:'base'}) === 0)?.[0];
+  return code ? String.fromCodePoint(...[...code].map(c => 127397 + c.charCodeAt(0))) : '🏳️';
+}
+const validCountry = code => typeof code === 'string' && countries.some(([value]) => value === code);
 
 export function createTraining({currentClass, mutateClass, render, e, fullName, newId, labelOption, targetPicker}) {
   let tab = 'events';
   let selectedEvent;
   const drafts = new Map();
   const pairSlots = new Map();
-  const selectEvent = group => (group.events ?? []).find(event => event.id === selectedEvent) ?? group.events?.[0];
+  const rawEvent = group => (group.events ?? []).find(event => event.id === selectedEvent) ?? group.events?.[0];
+  const selectEvent = group => rawEvent(group) ? eligibleEvent(group, rawEvent(group)) : undefined;
   const table = (label, headers, rows) => `<div class="class-report-scroll" role="region" aria-label="${e(label)}" tabindex="0">
     <table class="class-report-table"><thead><tr>${headers.map(header => `<th scope="col">${e(header)}</th>`).join('')}</tr></thead>
     <tbody>${rows.join('')}</tbody></table></div>`;
@@ -305,7 +425,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       const taken = new Set(event.results.filter(result => result !== saved).flatMap(result => result.members));
       const ids = pupil ? [pupil.id] : [0, 1].map(i => value('member' + i, saved?.members[i] ?? ''));
       const member = i => `<select ${owner} name="member${i}" required aria-label="${i ? 'Partenaire' : 'Premier élève'}"><option value="">Choisir</option>${group.students
-        .filter(student => !taken.has(student.id) || student.id === ids[i])
+        .filter(student => isPresent(group,event.lesson,student.id) && (!taken.has(student.id) || student.id === ids[i]))
         .map(student => labelOption(student.id, fullName(student), student.id === ids[i])).join('')}</select>`;
       const total = value('total', inputTime(saved?.total));
       const times = Array.from({length:event.passes}, (_, i) => parseTime(value('time' + i, inputTime(saved?.shots[i]?.time))));
@@ -335,10 +455,10 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     }
     let rows;
     if (event.size === 1) {
-      rows = group.students.filter(pupil => !event.elimination || event.elimination.active.includes(pupil.id))
+      rows = group.students.filter(pupil => isPresent(group,event.lesson,pupil.id) && (!event.elimination || event.elimination.active.includes(pupil.id)))
         .map(pupil => row(pupil.id, resultByPupil.get(pupil.id), pupil));
     } else {
-      const count = Math.max(0, Math.floor(group.students.length / 2) - event.results.length);
+      const count = Math.max(0, Math.floor(group.students.filter(student => isPresent(group,event.lesson,student.id)).length / 2) - event.results.length);
       const results = new Map(event.results.map(result => [result.id, result]));
       const slots = pairSlots.get(event.id) ?? [];
       const pending = slots.filter(key => !results.has(key)).slice(0, count);
@@ -395,7 +515,34 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
           <button type="submit" value="final">Valider la finale</button>
         </div></form>`}
       <h3>${finished ? 'Classement final' : 'Élèves éliminés'}</h3>
-      ${rows.length ? table('Classement de l’élimination', ['Rang','Élève','Tour atteint', 'Points'], rows) : '<p>Aucun élève éliminé.</p>'}`;
+      ${rows.length ? table('Classement de l’élimination', ['Rang','Élève','Tour atteint', 'Points'], rows) : '<p>Aucun élève éliminé.</p>'}
+      ${finished ? eliminationCorrection(group, rawEvent(group)) : ''}`;
+  }
+
+  function eliminationCorrection(group, event) {
+    const rows = eliminationRanking(event);
+    if (!rows.length) return '';
+    const pupils = new Map(group.students.map(student => [student.id, fullName(student)]));
+    return `<details><summary>Corriger le classement validé</summary>
+      <p>Réattribue les places et les tours atteints aux élèves. Pour échanger deux places, change les deux élèves avant d’enregistrer.</p>
+      <form id="training-correction">
+        ${table('Correction du classement', ['Place','Tour atteint','Élève'], rows.map((row,i) =>
+          `<tr><td>${row.place}</td><td>${row.stage}</td><td><select name="slot-${i}" aria-label="Élève à la ligne ${i+1}">
+          ${rows.map(item => labelOption(item.members[0], pupils.get(item.members[0]), item === row)).join('')}</select></td></tr>`))}
+        <button class="primary">Enregistrer la correction</button>
+      </form></details>`;
+  }
+
+  function attendancePanel(group, lesson) {
+    const labels = ['Présent','Absent','Dispensé'];
+    const rows = group.students.map(student => `<tr><th scope="row">${e(fullName(student))}</th>
+      <td><select name="status-${e(student.id)}" aria-label="Appel de ${e(fullName(student))}">
+        ${attendanceStates.map((status,i) => labelOption(status,labels[i],attendanceFor(group,lesson,student.id) === status)).join('')}
+      </select></td></tr>`);
+    return `<details class="training-details"><summary>Appel · ${e(lesson)}</summary>
+      <form id="training-attendance"><p>L’appel s’applique à toutes les épreuves de cette séance.</p>
+        ${table('Appel de la séance',['Élève','Statut'],rows)}<button class="primary">Enregistrer l’appel</button>
+      </form></details>`;
   }
 
   function eventPanel(group) {
@@ -415,7 +562,8 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       <button class="primary">Créer l’épreuve</button></form></details>
       ${event ? `<section class="panel" id="training-entry"><label>Épreuve de séance<select data-training-select>
         ${group.events.map(item => labelOption(item.id, item.lesson + ' · ' + item.name, item.id === event.id)).join('')}</select></label>
-        <div class="actions training-lesson-actions"><button type="button" class="danger" data-training="delete-lesson">Supprimer la séance</button></div>
+        <div class="actions training-lesson-actions"><button type="button" class="danger" data-training="delete-event">Supprimer l’épreuve</button><button type="button" class="danger" data-training="delete-lesson">Supprimer la séance</button></div>
+        ${attendancePanel(group,event.lesson)}
         <p class="training-format">${event.elimination ? 'Élimination' : event.size === 2 ? 'Binôme' : 'Individuel'} · ${event.loops} × 200 m · ${event.passes} passage(s) au tir · ${event.targets} cibles/passage</p>
         ${shotMode(event) === 'rings' ? '<p class="muted">Inclus les anneaux courus dans le temps total saisi.</p>' : ''}
         ${event.elimination ? eliminationPanel(group, event) : entryTable(group, event)}</section>
@@ -423,29 +571,39 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
   }
 
   function cyclePanel(group) {
-    const {lessons, students, teams} = cycleScores(group);
-    const headers = ['Rang', 'Élève', ...lessons, 'Total'];
-    let place = 0;
-    const rows = students.map((row, index) => {
-      if (!index || students[index - 1].total !== row.total) place = index + 1;
-      return `<tr><td>${place}</td><th scope="row">${e(fullName(row.student))}</th>${row.scores.map(score => `<td>${score}</td>`).join('')}<td><strong>${row.total}</strong></td></tr>`;
-    });
-    let teamPlace = 0;
+    const {lessons, students, teams, current} = cycleScores(group);
+    const number = new Intl.NumberFormat('fr', {maximumFractionDigits:2});
+    const movement = value => value == null ? '' : value === 0
+      ? '<span class="rank-move" aria-label="Classement inchangé">=</span>'
+      : `<span class="rank-move ${value > 0 ? 'rank-up' : 'rank-down'}" aria-label="${Math.abs(value)} place(s) ${value > 0 ? 'gagnée(s)' : 'perdue(s)'}">${value > 0 ? '↑' : '↓'} ${Math.abs(value)}</span>`;
+    const podium = teams.filter(row => row.place != null && row.place <= 3);
+    const rows = students.map(row => `<tr><td>${row.place}</td><th scope="row">${e(fullName(row.student))}</th>
+      ${row.scores.map((score,i) => `<td>${isPresent(group,lessons[i],row.student.id) ? score : '—'}</td>`).join('')}
+      <td><strong>${row.total}</strong> ${movement(row.movement)}</td></tr>`);
     return `<section class="panel"><h2>Points individuels par séance</h2>
-      ${table('Points individuels par séance', headers, rows)}
-      <p class="muted">Le premier reçoit autant de points que l’effectif inscrit à la création de l’épreuve, puis un point de moins par place. Ex æquo au même rang et aux mêmes points. Chaque partenaire reçoit les points de son binôme. Un résultat absent vaut 0.</p>
-      <h2>Classement des équipes</h2>
-      ${teams.length ? table('Classement des équipes', ['Rang', 'Équipe', 'Membres', 'Élèves comptés', 'Total brut', 'Points retenus'], teams.map((row, index) => {
-        if (!index || teams[index - 1].teamScore !== row.teamScore) teamPlace = index + 1;
-        return `<tr><td>${row.teamScore == null ? '—' : teamPlace}</td><th scope="row">${e(row.team.name)}</th><td>${e(row.members.map(item => fullName(item.student)).join(', ')) || '—'}</td><td>${row.counted} / ${row.members.length}</td><td>${row.total}</td><td><strong>${row.teamScore == null ? '—' : row.teamScore}</strong></td></tr>`;
-      })) : '<p>Crée des équipes dans l’onglet Équipes.</p>'}
+      ${current ? `<p class="muted">Évolution après ${e(current)}, par rapport au cumul de la séance précédente ayant des résultats.</p>` : ''}
+      ${table('Points individuels par séance', ['Rang','Élève',...lessons,'Total'], rows)}
+      <p class="muted">Les absents et dispensés sont exclus du classement de la séance. Un élève présent sans résultat marque 0 point.</p>
+      <h2>Classement des nations</h2>
+      ${podium.length ? `<div class="nation-podium">${podium.map(row => `<div class="nation-podium-card" data-place="${row.place}">
+        <span class="nation-medal" aria-hidden="true">${['🥇','🥈','🥉'][row.place-1]}</span><span class="nation-flag">${nationFlag(row.team)}</span>
+        <strong>${e(row.team.name)}</strong><small>${number.format(row.teamScore)} pts ${movement(row.movement)}</small></div>`).join('')}</div>` : ''}
+      ${teams.length ? table('Classement des nations', ['Rang','Nation','Membres','Total brut','Points retenus'], teams.map(row =>
+        `<tr><td>${row.place ?? '—'}</td><th scope="row"><span class="nation-flag-inline">${nationFlag(row.team)}</span> ${e(row.team.name)}</th>
+        <td>${e(row.members.map(item => fullName(item.student)).join(', ')) || '—'}</td><td>${row.total}</td>
+        <td><strong>${row.teamScore == null ? '—' : number.format(row.teamScore)}</strong> ${movement(row.movement)}</td></tr>`))
+        : '<p>Crée des équipes dans l’onglet Équipes.</p>'}
+      <small>En cas d’absence ou de dispense, les nations présentes comptent le même nombre de résultats. Une nation entièrement absente reçoit la moyenne des points des nations présentes pour la séance.</small>
     </section>`;
   }
 
   function teamsPanel(group) {
     return `<section class="panel"><h2>Équipes</h2><form id="training-team"><div class="grid">
-      <label>Nom de l’équipe<input required name="team" maxlength="70"></label></div><button class="primary">Créer l’équipe</button></form>
-      ${group.teams?.length ? `<p class="training-format">Choisis une équipe pour chaque élève. Le classement additionne les meilleurs totaux individuels. Chaque équipe compte autant d’élèves que la plus petite équipe non vide.</p>
+      <label>Nom de l’équipe<input required name="team" maxlength="70"></label>
+      <label>Drapeau<select name="country"><option value="">Automatique selon le nom</option>${countries.map(([code,label]) => labelOption(code,label,false)).join('')}</select></label></div><button class="primary">Créer l’équipe</button></form>
+      ${group.teams?.length ? `<p class="training-format">Tu peux changer l’équipe d’un élève à tout moment. Tous ses points du cycle suivent sa nouvelle équipe.</p>
+      <details><summary>Drapeaux des nations</summary>${group.teams.map(team => `<div class="row"><strong>${nationFlag(team)} ${e(team.name)}</strong>
+        <label>Drapeau<select data-training-flag="${e(team.id)}"><option value="">Automatique selon le nom</option>${countries.map(([code,label]) => labelOption(code,label,team.country === code)).join('')}</select></label></div>`).join('')}</details>
       ${group.teams.length >= 2 && group.students.length >= group.teams.length
         ? '<button data-training="draw-teams" class="primary">Tirer les équipes au sort</button><small>Les choix Fille/Garçon dans Classes servent à équilibrer le tirage.</small>'
         : '<small>Il faut au moins deux équipes et assez d’élèves pour toutes les remplir.</small>'}
@@ -471,14 +629,16 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       if (!mutateClass(group.id, next => {
         for (const student of next.students) student.teamId = assignments.get(student.id);
       }, 'Équipes tirées au sort.')) return;
-    } else if (action === 'delete-lesson') {
+    } else if (action === 'delete-lesson' || action === 'delete-event') {
       if (!event) return;
-      const ids = group.events.filter(item => item.lesson === event.lesson).map(item => item.id);
-      if (!window.confirm(`Supprimer « ${event.lesson} » et ses ${ids.length} épreuve(s), avec tous leurs résultats ?`)) return;
+      const wholeLesson = action === 'delete-lesson';
+      const ids = wholeLesson ? group.events.filter(item => item.lesson === event.lesson).map(item => item.id) : [event.id];
+      const label = wholeLesson ? 'la séance « ' + event.lesson + ' » et toutes ses épreuves' : 'l’épreuve « ' + event.name + ' »';
+      if (!window.confirm('Supprimer ' + label + ' et les résultats associés ?')) return;
       const removed = new Set(ids);
       if (!mutateClass(group.id, next => {
         next.events = next.events.filter(item => !removed.has(item.id));
-      }, 'Séance supprimée. Les classements ont été recalculés.')) return;
+      }, 'Suppression enregistrée. Les classements ont été recalculés.')) return;
       for (const id of ids) pairSlots.delete(id);
       for (const key of drafts.keys()) {
         if (ids.some(id => key.startsWith('training-row-' + id + '-'))) drafts.delete(key);
@@ -513,17 +673,48 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       selectedEvent = input.value;
       render();
     } else {
+      if (input.dataset.trainingFlag) {
+        const team = group.teams.find(item => item.id === input.dataset.trainingFlag);
+        if (!mutateClass(group.id, next => {
+          next.teams.find(item => item.id === team.id).country = validCountry(input.value) ? input.value : null;
+        }, 'Drapeau enregistré.')) input.value = team.country ?? '';
+        else render();
+        return;
+      }
       const student = group.students.find(item => item.id === input.dataset.trainingMember);
       const teamId = input.value || null;
       if (!mutateClass(group.id, next => {
         next.students.find(item => item.id === student.id).teamId = teamId;
-      }, 'Équipe enregistrée.')) input.value = student.teamId ?? '';
+      }, 'Équipe enregistrée. Les points du cycle ont été recalculés.')) input.value = student.teamId ?? '';
     }
   }
 
   function submit(id, form) {
     const group = currentClass();
-    if (id === 'training-eliminate' || id === 'training-final') {
+    if (id === 'training-attendance') {
+      const event = rawEvent(group);
+      const entries = group.students.map(student => ({id:student.id, status:form.get('status-' + student.id)}));
+      if (!entries.every(entry => attendanceStates.includes(entry.status))) throw new Error('Vérifie les statuts de présence.');
+      if (!mutateClass(group.id, next => {
+        next.attendance = (next.attendance ?? []).filter(row => row.lesson !== event.lesson);
+        next.attendance.push({lesson:event.lesson, entries});
+      }, 'Appel enregistré. Les classements ont été recalculés.')) return;
+      for (const key of drafts.keys()) {
+        if (group.events.some(item => item.lesson === event.lesson && key.startsWith('training-row-' + item.id + '-'))) drafts.delete(key);
+      }
+    } else if (id === 'training-correction') {
+      const event = rawEvent(group);
+      if (!event?.elimination?.finished) throw new Error('Valide la finale avant de corriger son classement.');
+      const rows = eliminationRanking(event);
+      const ids = new Set(rows.map(row => row.members[0]));
+      const correction = rows.map((_,i) => form.get('slot-' + i));
+      if (new Set(correction).size !== ids.size || !correction.every(id => ids.has(id))) {
+        throw new Error('Chaque élève doit apparaître une seule fois dans le classement.');
+      }
+      if (!mutateClass(group.id, next => {
+        next.events.find(item => item.id === event.id).elimination.correction = correction;
+      }, 'Classement corrigé. Les points ont été recalculés.')) return;
+    } else if (id === 'training-eliminate' || id === 'training-final') {
       const event = selectEvent(group);
       const state = event?.elimination;
       if (!state || state.finished || !state.active.length) throw new Error('Ce tour ne peut pas être validé.');
@@ -552,6 +743,7 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
         if (final) {
           saved.elimination.finished = true;
           saved.elimination.finalOrder = order;
+          saved.elimination.active = state.active;
           saved.results = [];
         } else {
           saved.elimination.manualRounds ??= [];
@@ -592,13 +784,14 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       selectedEvent = event.id;
     } else if (id === 'training-team') {
       const name = form.get('team').trim();
+      const country = form.get('country');
       if (!validName(name) || group.teams?.some(team => team.name.toLowerCase() === name.toLowerCase())) {
         throw new Error('Saisis un nom d’équipe différent des équipes existantes.');
       }
       if (!mutateClass(group.id, next => {
         next.events ??= [];
         next.teams ??= [];
-        next.teams.push({id:newId(), name});
+        next.teams.push({id:newId(), name, ...(validCountry(country) ? {country} : {})});
       }, 'Équipe créée.')) return;
     } else {
       const event = selectEvent(group);
@@ -609,11 +802,11 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
       const key = form.get('rowKey');
       const members = Array.from({length:event.size}, (_, i) => form.get('member' + i));
       const pupils = members.map(id => group.students.find(student => student.id === id));
-      if (pupils.some(student => !student) || new Set(members).size !== event.size) {
+      if (pupils.some(student => !student || !isPresent(group,event.lesson,student.id)) || new Set(members).size !== event.size) {
         throw new Error('Choisis des élèves différents pour le binôme.');
       }
-      if (event.results.some(result => result.id !== previous?.id && result.members.some(id => members.includes(id)))) {
-        throw new Error('Un élève a déjà un résultat dans cette épreuve.');
+      if (rawEvent(group).results.some(result => result.id !== previous?.id && result.members.some(id => members.includes(id)))) {
+        throw new Error('Un élève a déjà un résultat dans cette épreuve. Si son binôme est masqué par l’appel, rétablis sa présence pour modifier ce résultat.');
       }
       const shots = Array.from({length:event.passes}, (_, i) => {
         const rawAttempts = form.get('attempts' + i);
