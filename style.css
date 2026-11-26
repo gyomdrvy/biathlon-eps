@@ -135,7 +135,7 @@ button.danger{color:#a22517}
 #training-attendance,#training-correction{margin-top:10px}
 
 /* Flag images rendered from Noto Color Emoji (SIL Open Font License 1.1). */
-.nation-flag-image{display:inline-block;width:2em;height:1.5em;vertical-align:middle;background-image:url('./nation-flags.webp');background-repeat:no-repeat;background-size:1600% 1700%;flex:none}
+.nation-flag-image{display:inline-block;width:2em;height:1.5em;vertical-align:middle;background-repeat:no-repeat;background-size:1600% 500%;flex:none}
 
 .class-tools{display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,2fr);gap:18px;align-items:start}
 .class-tools h2{font-size:1rem}
@@ -145,4 +145,7 @@ button.danger{color:#a22517}
 .evaluation-tabs{margin-bottom:10px}
 @media(max-width:600px){.class-tools{grid-template-columns:1fr}}
 
-.nation-flag-fr{background:linear-gradient(90deg,#002395 0 33.333%,#fff 33.333% 66.667%,#ed2939 66.667%);border:1px solid #d5d9df;border-radius:3px;box-sizing:border-box}
+.nation-flag-sheet-1{background-image:url('./nation-flags-hd-1.webp')}
+.nation-flag-sheet-2{background-image:url('./nation-flags-hd-2.webp')}
+.nation-flag-sheet-3{background-image:url('./nation-flags-hd-3.webp')}
+.nation-flag-sheet-4{background-image:url('./nation-flags-hd-4.webp')}

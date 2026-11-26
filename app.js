@@ -1,7 +1,7 @@
 import {analyse, grade, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
-import {backupClass, readClassBackup, gradebookCsv} from './transfers.js?v=33';
-import {createTraining, removeTrainingStudent} from './sessions.js?v=33';
+import {backupClass, readClassBackup, gradebookCsv} from './transfers.js?v=34';
+import {createTraining, removeTrainingStudent} from './sessions.js?v=34';
 
 const KEY = 'biathlon-eps-classes-v1';
 const screen = document.querySelector('#screen');

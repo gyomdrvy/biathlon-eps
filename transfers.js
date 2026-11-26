@@ -1,4 +1,4 @@
-import {restoreTraining} from './sessions.js?v=33';
+import {restoreTraining} from './sessions.js?v=34';
 
 const format = 'biathlon-eps-class';
 const version = 1;

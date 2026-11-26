@@ -349,11 +349,12 @@ function nationFlag(team) {
   const embeddedCode = formerEmoji && String.fromCharCode(...[...formerEmoji].map(letter => letter.codePointAt(0) - 127397));
   const code = team.country || countryAliases.get(name) || localizedCountries.get(name) || embeddedCode
     || (flagIndex.has(name.toUpperCase()) ? name.toUpperCase() : '');
-  if (code === 'FR') return '<span aria-hidden="true" class="nation-flag-image nation-flag-fr"></span>';
   const index = flagIndex.get(code) ?? 0;
   const x = (index % 16) * 100 / 15;
-  const y = Math.floor(index / 16) * 100 / 16;
-  return `<span aria-hidden="true" class="nation-flag-image" style="background-position:${x}% ${y}%"></span>`;
+  const row = Math.floor(index / 16);
+  const sheet = Math.floor(row / 5) + 1;
+  const y = (row % 5) * 25;
+  return `<span aria-hidden="true" class="nation-flag-image nation-flag-sheet-${sheet}" style="background-position:${x}% ${y}%"></span>`;
 }
 const validCountry = code => typeof code === 'string' && countries.some(([value]) => value === code);
 
