@@ -1,5 +1,5 @@
-const CACHE = 'biathlon-eps-v36';
-const ASSETS = ['./', './index.html', './style.css?v=36', './nation-flags-hd-1.webp', './nation-flags-hd-2.webp', './nation-flags-hd-3.webp', './nation-flags-hd-4.webp', './app.js?v=36', './metrics.js',
+const CACHE = 'biathlon-eps-v37';
+const ASSETS = ['./', './index.html', './style.css?v=37', './nation-flags-hd-1.webp', './nation-flags-hd-2.webp', './nation-flags-hd-3.webp', './nation-flags-hd-4.webp', './app.js?v=37', './metrics.js',
   './excel.js', './transfers.js?v=36', './sessions.js?v=36', './vendor/pako_inflate.min.js', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './apple-touch-icon.png', './modele-classe.xlsx'];
 

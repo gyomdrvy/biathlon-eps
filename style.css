@@ -156,3 +156,14 @@ button.danger{color:#a22517}
 .top-tools{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;padding-block:6px}
 .app-update{border-color:#ffe3d4;background:#fff2e9;color:#70241b;font-size:.875rem;min-height:36px;padding:6px 10px}
 .app-update[hidden]{display:none}
+
+.class-score-legend{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0}
+.class-score-legend li,.class-averages [data-score-color]{border-radius:6px;padding:3px 8px}
+[data-score-color="red"]{--score-bg:#fce0dd;--score-ink:#7b2018}
+[data-score-color="yellow"]{--score-bg:#fff0b8;--score-ink:#624800}
+[data-score-color="blue"]{--score-bg:#deedff;--score-ink:#174779}
+[data-score-color="green"]{--score-bg:#def2e2;--score-ink:#205529}
+.class-report-table td[data-score-color]:not([data-score-color=""]),
+.class-averages [data-score-color]:not([data-score-color=""]),
+.class-score-legend li{background:var(--score-bg);color:var(--score-ink)}
+.class-report-table td[data-score-color]:not([data-score-color=""]) input{background:var(--score-bg);color:var(--score-ink)}

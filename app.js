@@ -194,6 +194,15 @@ function studentGrade(student) {
   return student.result ? grade(student, analyse(student.reference, student.result)) : null;
 }
 
+function scoreColor(value, max) {
+  if (!Number.isFinite(value)) return '';
+  const percent = Math.round(100 * value / max);
+  if (percent <= 25) return 'red';
+  if (percent <= 50) return 'yellow';
+  if (percent <= 75) return 'blue';
+  return 'green';
+}
+
 function classAverages(students, grades) {
   const criteria = [
     ['Vitesse hors tir', 5, grades.map(mark => mark?.speed)],
@@ -207,7 +216,7 @@ function classAverages(students, grades) {
     const scores = values.filter(Number.isFinite);
     const mean = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null;
     return `<div class="card ${max === 20 ? 'class-average-final' : ''}"><small>${label}</small>
-      <strong>${points(mean, max)}</strong><small>${scores.length} / ${students.length} élèves</small></div>`;
+      <strong data-score-color="${scoreColor(mean, max)}">${points(mean, max)}</strong><small>${scores.length} / ${students.length} élèves</small></div>`;
   }).join('');
 }
 
@@ -220,17 +229,23 @@ function classReport() {
   const rows = group.students.map((student, index) => {
     const mark = grades[index];
     return `<tr><th scope="row">${e(fullName(student))}</th>
-      <td>${points(mark?.speed ?? null, 5)}</td>
-      <td>${points(mark?.objective ?? null, 5)}</td>
-      <td>${points(mark?.accuracy ?? null, 4)}</td>
-      <td>${points(mark?.shootingTime ?? null, 2)}</td>
-      <td><input data-investment="${student.id}" inputmode="decimal" aria-label="Investissement sur 4 · ${e(fullName(student))}" value="${e(student.investment?.toString().replace('.', ','))}" placeholder="—"></td>
-      <td class="final-mark" data-final-mark>${points(mark?.total ?? null, 20)}</td></tr>`;
+      <td data-score-color="${scoreColor(mark?.speed, 5)}">${points(mark?.speed ?? null, 5)}</td>
+      <td data-score-color="${scoreColor(mark?.objective, 5)}">${points(mark?.objective ?? null, 5)}</td>
+      <td data-score-color="${scoreColor(mark?.accuracy, 4)}">${points(mark?.accuracy ?? null, 4)}</td>
+      <td data-score-color="${scoreColor(mark?.shootingTime, 2)}">${points(mark?.shootingTime ?? null, 2)}</td>
+      <td data-score-color="${scoreColor(student.investment, 4)}"><input data-investment="${student.id}" inputmode="decimal" aria-label="Investissement sur 4 · ${e(fullName(student))}" value="${e(student.investment?.toString().replace('.', ','))}" placeholder="—"></td>
+      <td class="final-mark" data-final-mark data-score-color="${scoreColor(mark?.total, 20)}">${points(mark?.total ?? null, 20)}</td></tr>`;
   }).join('');
   return `<section class="panel"><h2 id="class-report-title">Bilan de classe · ${e(group.name)}</h2>
     <div class="actions class-export-actions">
       <button type="button" data-export="idoceo">Exporter vers iDoceo (CSV)</button>
     </div>
+    <ul class="class-score-legend" aria-label="Couleurs des notes selon le pourcentage du barème">
+      <li data-score-color="red">0 à 25 %</li>
+      <li data-score-color="yellow">26 à 50 %</li>
+      <li data-score-color="blue">51 à 75 %</li>
+      <li data-score-color="green">76 à 100 %</li>
+    </ul>
     <h3 class="class-averages-title">Moyennes de la classe</h3>
     <div class="class-averages" id="class-averages" aria-live="polite">${classAverages(group.students, grades)}</div>
     <div class="class-report-scroll" role="region" aria-labelledby="class-report-title" tabindex="0">
@@ -379,7 +394,10 @@ screen.addEventListener('change', event => {
     const students = currentClass().students;
     const grades = students.map(studentGrade);
     const mark = grades[students.findIndex(item => item.id === investmentId)];
-    input.closest('tr').querySelector('[data-final-mark]').textContent = points(mark?.total ?? null, 20);
+    input.closest('td').dataset.scoreColor = scoreColor(investment, 4);
+    const finalMark = input.closest('tr').querySelector('[data-final-mark]');
+    finalMark.textContent = points(mark?.total ?? null, 20);
+    finalMark.dataset.scoreColor = scoreColor(mark?.total, 20);
     screen.querySelector('#class-averages').innerHTML = classAverages(students, grades);
     return;
   }
