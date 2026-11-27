@@ -9,11 +9,12 @@
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <link rel="manifest" href="./manifest.webmanifest">
-<link rel="stylesheet" href="./style.css?v=35">
-<script type="module" src="./app.js?v=35"></script>
+<link rel="stylesheet" href="./style.css?v=36">
+<script type="module" src="./app.js?v=36"></script>
 </head>
 <body>
-<header><div class="top"><a href="./" class="brand"><img src="./icon-192.png" alt=""><span>BIATHLON <b>EPS</b></span></a><details class="backup-menu" id="backup-menu">
+<header><div class="top"><a href="./" class="brand"><img src="./icon-192.png" alt=""><span>BIATHLON <b>EPS</b></span></a><div class="top-tools"><button type="button" class="app-update" id="app-update" hidden>Mettre à jour</button>
+<details class="backup-menu" id="backup-menu">
   <summary>Sauvegarde</summary>
   <div class="backup-menu-body">
     <p>Classes, séances et résultats de cet appareil.</p>
@@ -23,7 +24,7 @@
       <button type="submit" class="primary">Restaurer la sauvegarde</button>
     </form>
   </div>
-</details></div></header>
+</details></div></div></header>
 <main>
 <nav aria-label="Sections"><button data-view="classes">Classes</button><button data-view="sessions">Séances</button><button data-view="entry">Évaluation</button></nav>
 <div id="status" role="status"></div>

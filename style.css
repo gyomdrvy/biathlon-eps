@@ -152,3 +152,7 @@ button.danger{color:#a22517}
 .backup-menu-body{position:absolute;right:0;top:calc(100% + 6px);z-index:10;width:min(330px,calc(100vw - 32px));display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;background:white;color:#29221f;box-shadow:0 12px 30px #29221f30}
 .backup-menu-body form{display:grid;gap:8px}
 .backup-menu-body p{margin:0}
+
+.top-tools{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;padding-block:6px}
+.app-update{border-color:#ffe3d4;background:#fff2e9;color:#70241b;font-size:.875rem;min-height:36px;padding:6px 10px}
+.app-update[hidden]{display:none}

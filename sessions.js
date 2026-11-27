@@ -857,5 +857,5 @@ export function createTraining({currentClass, mutateClass, render, e, fullName, 
     if (tableScroll && scroll != null) tableScroll.scrollLeft = scroll;
   }
 
-  return {html, click, change, preview, submit, reset() { selectedEvent = undefined; }};
+  return {html, click, change, preview, submit, hasDrafts:() => drafts.size > 0, reset() { selectedEvent = undefined; }};
 }

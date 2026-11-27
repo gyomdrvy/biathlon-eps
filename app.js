@@ -1,7 +1,7 @@
 import {analyse, grade, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
-import {backupAll, readBackup, gradebookCsv} from './transfers.js?v=35';
-import {createTraining, removeTrainingStudent} from './sessions.js?v=35';
+import {backupAll, readBackup, gradebookCsv} from './transfers.js?v=36';
+import {createTraining, removeTrainingStudent} from './sessions.js?v=36';
 
 const KEY = 'biathlon-eps-classes-v1';
 const screen = document.querySelector('#screen');
@@ -553,4 +553,70 @@ document.addEventListener('submit', async event => {
 });
 
 render();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).catch(() => {});
+function hasUnsavedInput() {
+  if (resultDrafts.size || training.hasDrafts()) return true;
+  return [...document.querySelectorAll('#screen form input, #screen form select')].some(field => {
+    if (field.type === 'hidden') return false;
+    if (field.type === 'file') return field.files.length > 0;
+    if (field.type === 'checkbox' || field.type === 'radio') return field.checked !== field.defaultChecked;
+    if (field.tagName === 'SELECT') {
+      const defaults = [...field.options].filter(option => option.defaultSelected);
+      return field.value !== (defaults.at(-1) ?? field.options[0])?.value;
+    }
+    return field.value !== field.defaultValue;
+  });
+}
+
+async function setupUpdates() {
+  const workers = navigator.serviceWorker;
+  const button = document.getElementById('app-update');
+  let applying = false;
+  let timeout;
+  const registration = await workers.register('./sw.js', {updateViaCache:'none'});
+  const show = () => {button.hidden = !registration.waiting || !workers.controller;};
+
+  function watch(worker) {
+    worker?.addEventListener('statechange', show);
+    show();
+  }
+
+  registration.addEventListener('updatefound', () => watch(registration.installing));
+  watch(registration.installing);
+  workers.addEventListener('controllerchange', () => {
+    if (!applying) {
+      show();
+      return;
+    }
+    clearTimeout(timeout);
+    window.location.reload();
+  });
+  button.addEventListener('click', () => {
+    const waiting = registration.waiting;
+    if (!waiting || applying) return;
+    if (hasUnsavedInput() && !window.confirm('Une saisie n’est pas enregistrée. Annule pour l’enregistrer, ou confirme pour mettre à jour et abandonner cette saisie.')) return;
+    applying = true;
+    button.disabled = true;
+    button.textContent = 'Mise à jour…';
+    timeout = setTimeout(() => {
+      button.disabled = false;
+      button.textContent = 'Mettre à jour';
+      if (!registration.waiting) {
+        applying = false;
+        show();
+        status.textContent = 'La nouvelle version est prête. Rouvre l’application pour la charger.';
+      } else {
+        applying = false;
+        status.textContent = 'La mise à jour prend du temps. Tu peux réessayer.';
+      }
+    }, 15000);
+    waiting.postMessage('APPLY_UPDATE');
+  });
+  const check = () => registration.update().catch(() => {});
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') check();
+  });
+  window.addEventListener('online', check);
+  check();
+}
+
+if ('serviceWorker' in navigator) setupUpdates().catch(() => {});
