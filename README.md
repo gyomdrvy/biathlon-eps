@@ -43,7 +43,7 @@ En haut du **Bilan de classe**, les moyennes des cinq critères et de la note fi
 
 ## Sauvegarde et export iDoceo
 
-Dans **Classes → Sauvegarde et réimportation**, exporte l’ensemble de la classe en JSON, y compris les résultats, séances, appels et équipes. **Réimporter la classe** ouvre une copie indépendante. Les copies d’une classe existante reçoivent un numéro.
+Dans le bandeau, ouvre **Sauvegarde** pour exporter toutes les classes et leurs données en JSON. La restauration d’une sauvegarde complète remplace les données de l’appareil après confirmation. Les anciens fichiers d’une seule classe s’importent comme copies.
 
 **Exporter vers iDoceo (CSV)** télécharge un fichier contenant le nom, le prénom, les cinq critères et la note finale sur 20. Les notes non renseignées restent vides. Dans l’assistant d’importation iDoceo, associe les colonnes Nom et Prénom et sélectionne les colonnes de notes à importer.
 

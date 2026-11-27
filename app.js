@@ -1,7 +1,7 @@
 import {analyse, grade, formatTime, inputTime, parseTime, shotAccuracy, totalShotAccuracy, SHOOT_TARGET} from './metrics.js';
 import {readRoster} from './excel.js';
-import {backupClass, readClassBackup, gradebookCsv} from './transfers.js?v=34';
-import {createTraining, removeTrainingStudent} from './sessions.js?v=34';
+import {backupAll, readBackup, gradebookCsv} from './transfers.js?v=35';
+import {createTraining, removeTrainingStudent} from './sessions.js?v=35';
 
 const KEY = 'biathlon-eps-classes-v1';
 const screen = document.querySelector('#screen');
@@ -65,18 +65,6 @@ function classPicker() {
   </div></section>`;
 }
 
-function backupPanel(group) {
-  return `<section class="panel"><h2>Sauvegarde et réimportation</h2>
-    <p>Le fichier JSON contient toute la classe, ses résultats, ses séances, ses appels et ses équipes.</p>
-    <div class="actions class-export-actions">
-      ${group ? '<button type="button" data-export="backup">Sauvegarder la classe (JSON)</button>' : ''}
-      <form id="backup-form" class="class-restore-form">
-        <input aria-label="Fichier de sauvegarde JSON" type="file" name="file" accept=".json,application/json" required>
-        <button type="submit" class="primary">Réimporter la classe</button>
-      </form>
-    </div></section>`;
-}
-
 function classes() {
   const group = currentClass();
   const edited = group?.students.find(item => item.id === editingId);
@@ -89,7 +77,6 @@ function classes() {
       <button class="primary">Importer</button><a href="./modele-classe.xlsx" download>Modèle Excel</a>
     </form><small>Première feuille · Nom, Prénom et Référence 200 m (facultative).</small></div>
   </section>` : ''}
-  ${backupPanel(group)}
   ${group ? `<section class="panel"><h2>${edited ? 'Modifier un élève' : 'Ajouter un élève'}</h2>
     <form id="student-form"><div class="grid3">
     <label>Nom<input name="last" required maxlength="100" value="${e(edited?.last)}"></label>
@@ -304,15 +291,17 @@ document.addEventListener('click', event => {
   if (!button) return;
   if (button.dataset.training) return training.click(button);
   if (button.dataset.export) {
+    if (button.dataset.export === 'backup') {
+      downloadFile(backupAll(data), 'Biathlon-EPS-sauvegarde.json', 'application/json');
+      document.getElementById('backup-menu').open = false;
+      status.textContent = 'Sauvegarde complète téléchargée.';
+      return;
+    }
     const group = currentClass();
     if (!group) return;
     const filename = group.name.replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-+|-+$/g, '') || 'classe';
-    if (button.dataset.export === 'backup') {
-      downloadFile(backupClass(group), `Biathlon-${filename}.json`, 'application/json');
-    } else {
-      downloadFile(gradebookCsv(group.students, group.students.map(studentGrade)),
-        `Biathlon-${filename}-iDoceo.csv`, 'text/csv;charset=utf-8');
-    }
+    downloadFile(gradebookCsv(group.students, group.students.map(studentGrade)),
+      `Biathlon-${filename}-iDoceo.csv`, 'text/csv;charset=utf-8');
     return;
   }
   if (button.dataset.hits !== undefined) {
@@ -452,9 +441,10 @@ function mutateClass(id, change, message) {
   return update(groups => change(groups.find(group => group.id === id)), message);
 }
 
-screen.addEventListener('submit', async event => {
-  event.preventDefault();
+document.addEventListener('submit', async event => {
   const target = event.target;
+  if (target.id !== 'backup-form' && !screen.contains(target)) return;
+  event.preventDefault();
   const form = new FormData(target);
   const groupId = classId;
   try {
@@ -465,21 +455,30 @@ screen.addEventListener('submit', async event => {
       const file = form.get('file');
       const button = target.querySelector('button');
       button.disabled = true;
-      let group;
+      let backup;
       try {
-        group = readClassBackup(await file.text(), newId);
+        backup = readBackup(await file.text(), newId);
       } catch (error) {
         if (error instanceof SyntaxError) throw new Error('Le fichier JSON est illisible.');
         throw error;
       } finally {
         button.disabled = false;
       }
-      const base = group.name;
-      for (let copy = 2; data.some(item => item.name.toLowerCase() === group.name.toLowerCase()); copy++) {
-        group.name = `${base} (${copy})`;
+      const [group] = backup.classes;
+      if (backup.complete) {
+        if (data.length && !window.confirm('Restaurer cette sauvegarde complète ? Elle remplacera toutes les données Biathlon EPS de cet appareil.')) return;
+        if (!update(groups => groups.splice(0, groups.length, ...backup.classes), 'Toutes les données ont été restaurées.')) return;
+      } else {
+        const base = group.name;
+        for (let copy = 2; data.some(item => item.name.toLowerCase() === group.name.toLowerCase()); copy++) {
+          group.name = `${base} (${copy})`;
+        }
+        if (!update(groups => groups.push(group), 'Classe restaurée avec ses résultats.')) return;
       }
-      if (!update(groups => groups.push(group), 'Classe restaurée avec ses résultats.')) return;
-      classId = group.id;
+      target.reset();
+      document.getElementById('backup-menu').open = false;
+      classId = group?.id;
+      resultDrafts.clear();
       studentId = undefined;
       editingId = undefined;
       training.reset();

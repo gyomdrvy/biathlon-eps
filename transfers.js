@@ -1,10 +1,22 @@
-import {restoreTraining} from './sessions.js?v=34';
+import {restoreTraining} from './sessions.js?v=35';
 
 const format = 'biathlon-eps-class';
 const version = 1;
 
-export function backupClass(group) {
-  return JSON.stringify({format, version, class: group}, null, 2);
+const fullFormat = 'biathlon-eps-all';
+
+export function backupAll(classes) {
+  return JSON.stringify({format:fullFormat, version, classes}, null, 2);
+}
+
+export function readBackup(source, newId) {
+  const payload = JSON.parse(source.replace(/^\uFEFF/, ''));
+  if (payload?.format !== fullFormat) return {complete:false, classes:[readClassBackup(source, newId)]};
+  if (payload.version !== version || !Array.isArray(payload.classes)) {
+    throw new Error('Choisis un fichier de sauvegarde complète Biathlon EPS valide.');
+  }
+  return {complete:true, classes:payload.classes.map(group =>
+    readClassBackup(JSON.stringify({format, version, class:group}), newId))};
 }
 
 export function readClassBackup(source, newId) {
